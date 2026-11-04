@@ -13,6 +13,7 @@
 <link rel="apple-touch-icon" href="icons/apple-180.png">
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
 html,body{margin:0;background:#f2f4f7;color:#101828;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 body{min-height:100vh;padding-bottom:env(safe-area-inset-bottom)}
 button{font:inherit;cursor:pointer}
@@ -74,6 +75,10 @@ button{font:inherit;cursor:pointer}
 .setup textarea{width:100%;border:1px solid #d0d5dd;border-radius:10px;padding:10px;font-size:14px;font-family:ui-monospace,Consolas,monospace;min-height:84px}
 .btn{display:block;width:100%;border:none;border-radius:10px;background:#1a7f37;color:#fff;font-weight:700;font-size:15px;padding:13px;margin-top:12px}
 .err{color:#b42318;font-size:13px;margin-top:8px}
+.ib.on{background:#fff;color:#1a7f37}
+.nudge{display:flex;align-items:center;gap:10px;background:#ecfdf3;color:#05603a;font-size:13px;font-weight:600;padding:9px 12px 9px 14px}
+.nudge span{flex:1}.nudge .go{border:none;background:#1a7f37;color:#fff;border-radius:8px;padding:7px 12px;font-weight:700;font-size:13px}
+.nudge .x{border:none;background:none;color:#05603a;font-size:20px;padding:0 4px}
 .offline{background:#fffbeb;color:#854d0e;font-size:12.5px;font-weight:600;padding:7px 14px;text-align:center}
 </style>
 </head>
@@ -139,6 +144,7 @@ button{font:inherit;cursor:pointer}
   function toast(msg, ms) { var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove('show'); }, ms || 2000); }
   var ICON_REFRESH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>';
   var ICON_MENU = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
+  var ICON_BELL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
   var ICON_SEARCH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
 
   // ---------- setup screen (first open without a link) ----------
@@ -175,11 +181,18 @@ button{font:inherit;cursor:pointer}
     ui.refresh.onclick = function () { load(true); };
     var menuB = el('button', 'ib'); menuB.innerHTML = ICON_MENU; menuB.setAttribute('aria-label', 'Menu');
     menuB.onclick = function () { document.getElementById('menu').hidden = false; };
-    bar.appendChild(ui.refresh); bar.appendChild(menuB);
+    ui.bell = el('button', 'ib'); ui.bell.innerHTML = ICON_BELL; ui.bell.setAttribute('aria-label', 'PASS / FAIL alerts');
+    ui.bell.onclick = toggleAlerts; ui.bell.hidden = !pushSupported();
+    bar.appendChild(ui.bell); bar.appendChild(ui.refresh); bar.appendChild(menuB);
     top.appendChild(bar);
     ui.dates = el('div', 'dates'); top.appendChild(ui.dates);
     app.appendChild(top);
     ui.offline = el('div', 'offline'); ui.offline.hidden = true; app.appendChild(ui.offline);
+    ui.nudge = el('div', 'nudge'); ui.nudge.hidden = true;
+    ui.nudge.appendChild(el('span', null, '🔔 Get a notification when a vehicle is PASS / FAIL'));
+    var go = el('button', 'go', 'Turn on'); go.onclick = toggleAlerts; ui.nudge.appendChild(go);
+    var nx = el('button', 'x', '×'); nx.setAttribute('aria-label', 'Close'); nx.onclick = function () { localStorage.setItem('atsLive.nudged', '1'); ui.nudge.hidden = true; }; ui.nudge.appendChild(nx);
+    app.appendChild(ui.nudge);
 
     var s2 = el('div', 'sticky2');
     ui.cards = el('div', 'cards'); s2.appendChild(ui.cards);
@@ -317,7 +330,7 @@ button{font:inherit;cursor:pointer}
       state.lastSig = sig; state.data = j;
       try { localStorage.setItem(DATA_KEY + j.date, JSON.stringify(j)); localStorage.setItem(DATA_KEY + 'last', j.date); } catch (e) { /* full */ }
       ui.offline.hidden = true;
-      renderDates(); renderStatus();
+      renderDates(); renderStatus(); renderBell(); checkKey();
       if (changed) { renderCards(); renderList(); }
       if (manual === true) toast('Updated', 900);
     }).catch(function (e) {
@@ -328,6 +341,64 @@ button{font:inherit;cursor:pointer}
       if (!state.data) { ui.list.textContent = ''; rowEls.clear(); ui.list.appendChild(el('div', 'empty', 'Could not reach Google. Check internet and pull ↻ refresh.')); }
     }).then(function () { state.loading = false; ui.refresh.classList.remove('spin'); });
   }
+  // ---------- PASS / FAIL alerts (Web Push) ----------
+  var PUSH_KEY = 'atsLive.push';
+  function pushSupported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+  function alertsOn() { return localStorage.getItem(PUSH_KEY) === '1' && Notification.permission === 'granted'; }
+  function renderBell() {
+    if (!ui.bell) return;
+    var on = pushSupported() && alertsOn();
+    ui.bell.classList.toggle('on', on);
+    ui.bell.title = on ? 'PASS / FAIL alerts are ON' : 'Turn on PASS / FAIL alerts';
+    var vapid = state.data && state.data.vapid;
+    ui.nudge.hidden = !(pushSupported() && vapid && !on && Notification.permission !== 'denied' && !localStorage.getItem('atsLive.nudged'));
+  }
+  function b64ToBytes(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/'); s += '==='.slice((s.length + 3) % 4);
+    var bin = atob(s), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function sendSub(sub, on) {
+    var url = cfg.u + '?format=json&v=' + encodeURIComponent(cfg.v) + '&on=' + (on ? '1' : '0') + '&sub=' + encodeURIComponent(JSON.stringify(sub)) + '&t=' + Date.now();
+    return fetch(url, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) { if (!j.ok) throw new Error(j.error || 'error'); return j; });
+  }
+  function toggleAlerts() {
+    if (!pushSupported()) { toast('This phone / browser cannot show alerts'); return; }
+    var isIOS = /iphone|ipad/i.test(navigator.userAgent);
+    if (isIOS && !window.navigator.standalone) { toast('iPhone: first Add to Home Screen, then open the app from the icon', 3500); return; }
+    navigator.serviceWorker.ready.then(function (reg) {
+      return reg.pushManager.getSubscription().then(function (cur) {
+        if (alertsOn() && cur) {
+          if (!confirm('Turn off PASS / FAIL alerts on this phone?')) return;
+          return sendSub(cur.toJSON(), false).catch(function () {}).then(function () { return cur.unsubscribe(); }).then(function () {
+            localStorage.removeItem(PUSH_KEY); renderBell(); toast('Alerts OFF');
+          });
+        }
+        var vapid = state.data && state.data.vapid;
+        if (!vapid) { toast('Alerts are not switched on in the office yet (Smart Notepad → Settings → Live view)', 4000); return; }
+        return Notification.requestPermission().then(function (p) {
+          if (p !== 'granted') { toast('Notifications are blocked. Allow them in phone settings for this app.', 4000); return; }
+          var go = function () { return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(vapid) }); };
+          // a phone subscribed with an old key must subscribe again
+          return (cur ? cur.unsubscribe() : Promise.resolve()).then(go).then(function (sub) { return sendSub(sub.toJSON(), true); }).then(function () {
+            localStorage.setItem(PUSH_KEY, '1'); localStorage.setItem('atsLive.vapid', vapid); renderBell(); toast('🔔 Alerts ON · PASS / FAIL will come here');
+          });
+        });
+      });
+    }).catch(function (e) { toast('Could not turn on alerts: ' + (e && e.message || e), 4000); });
+  }
+  // the office key changed (new PC / reset): quietly subscribe again
+  function checkKey() {
+    var vapid = state.data && state.data.vapid;
+    if (!vapid || !alertsOn() || localStorage.getItem('atsLive.vapid') === vapid) return;
+    navigator.serviceWorker.ready.then(function (reg) {
+      return reg.pushManager.getSubscription().then(function (cur) { return cur ? cur.unsubscribe() : null; })
+        .then(function () { return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(vapid) }); })
+        .then(function (sub) { return sendSub(sub.toJSON(), true); }).then(function () { localStorage.setItem('atsLive.vapid', vapid); });
+    }).catch(function () {});
+  }
+
   function startTimer() { clearInterval(timer); timer = setInterval(function () { if (!document.hidden) load(false); }, EVERY); }
 
   function start() {
@@ -364,6 +435,7 @@ button{font:inherit;cursor:pointer}
   };
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'refresh' && cfg) load(true); });
   loadCfg();
   if (cfg) start(); else showSetup();
 })();
