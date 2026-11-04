@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a7f37">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ATS Live">
+<title>ATS Live</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-180.png">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:#f2f4f7;color:#101828;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{min-height:100vh;padding-bottom:env(safe-area-inset-bottom)}
+button{font:inherit;cursor:pointer}
+.top{position:sticky;top:0;z-index:5;background:#1a7f37;color:#fff;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;box-shadow:0 1px 0 rgba(0,0,0,.08)}
+.bar{display:flex;align-items:center;gap:10px}
+.logo{width:34px;height:34px;border-radius:9px;flex:none;background:#fff url(icons/icon-192.png) center/cover}
+.ttl{flex:1;min-width:0}
+.ttl h1{margin:0;font-size:17px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.95;margin-top:2px}
+.dot{width:8px;height:8px;border-radius:50%;background:#86efac;flex:none;box-shadow:0 0 0 0 rgba(134,239,172,.7);animation:pulse 2s infinite}
+.dot.old{background:#fbbf24;animation:none}.dot.off{background:#fca5a5;animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(134,239,172,.7)}70%{box-shadow:0 0 0 7px rgba(134,239,172,0)}100%{box-shadow:0 0 0 0 rgba(134,239,172,0)}}
+.ib{width:38px;height:38px;border:none;border-radius:10px;background:rgba(255,255,255,.14);color:#fff;display:flex;align-items:center;justify-content:center;flex:none}
+.ib:active{background:rgba(255,255,255,.28)}
+.ib svg{width:19px;height:19px}
+.spin svg{animation:sp .8s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+.dates{display:flex;gap:6px;overflow-x:auto;padding:10px 0 2px;scrollbar-width:none}
+.dates::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;white-space:nowrap}
+.chip.on{background:#fff;color:#1a7f37;border-color:#fff}
+.sticky2{position:sticky;z-index:4;background:#f2f4f7;padding:10px 12px 6px}
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.card{border:2px solid transparent;border-radius:12px;padding:8px 2px 7px;text-align:center;font-size:11px;font-weight:700;letter-spacing:.2px;background:#fff;transition:border-color .15s,transform .1s}
+.card:active{transform:scale(.97)}
+.card b{display:block;font-size:21px;line-height:1.15;font-variant-numeric:tabular-nums}
+.card.on{border-color:currentColor}
+.search{margin-top:8px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e4e7ec;border-radius:10px;padding:0 10px}
+.search svg{width:16px;height:16px;color:#98a2b3;flex:none}
+.search input{flex:1;border:none;outline:none;font-size:15px;padding:10px 0;background:transparent;min-width:0}
+.search button{border:none;background:none;color:#98a2b3;font-size:18px;padding:4px}
+.info{padding:2px 14px 6px;font-size:12px;color:#667085;display:flex;justify-content:space-between}
+.list{padding:0 12px 24px}
+.row{display:flex;align-items:center;gap:10px;background:#fff;border-radius:10px;padding:11px 12px;margin-bottom:6px;border-left:5px solid #d0d5dd;transition:background-color .6s}
+.row.flash{background:#fef9c3}
+.n{color:#98a2b3;font-size:12px;min-width:22px;font-variant-numeric:tabular-nums}
+.veh{flex:1;font-family:ui-monospace,"SF Mono",Consolas,monospace;font-weight:700;font-size:15px;letter-spacing:.3px;min-width:0}
+.dsc{font-size:11px;font-weight:700;color:#9d174d;white-space:nowrap}.dsc.ok{color:#15803d}
+.st{font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap;max-width:46%;overflow:hidden;text-overflow:ellipsis}
+.k-PASS{border-left-color:#16a34a}.k-PASS .st{background:#dcfce7;color:#166534}
+.k-FAIL{border-left-color:#dc2626}.k-FAIL .st{background:#fee2e2;color:#991b1b}
+.k-DONE{border-left-color:#2563eb}.k-DONE .st{background:#dbeafe;color:#1e40af}
+.k-HOLD{border-left-color:#7c3aed}.k-HOLD .st{background:#ede9fe;color:#5b21b6}
+.k-ISSUE{border-left-color:#ea580c}.k-ISSUE .st{background:#ffedd5;color:#9a3412}
+.k-PENDING{border-left-color:#ca8a04}.k-PENDING .st{background:#fef9c3;color:#854d0e}
+.empty{text-align:center;color:#667085;padding:48px 16px;font-size:14px}
+.sk{height:46px;border-radius:10px;margin-bottom:6px;background:linear-gradient(90deg,#e9ecf1 25%,#f5f6f8 50%,#e9ecf1 75%);background-size:200% 100%;animation:sh 1.2s infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#101828;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;z-index:20;max-width:90%;text-align:center;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+.sheet{position:fixed;inset:0;background:rgba(16,24,40,.45);z-index:30;display:flex;align-items:flex-end}
+.sheet[hidden]{display:none}
+.panel{background:#fff;width:100%;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+.panel h2{font-size:16px;margin:0 0 12px}
+.mi{display:block;width:100%;text-align:left;border:none;background:#f9fafb;border-radius:10px;padding:13px 14px;margin-bottom:8px;font-size:15px;color:#101828}
+.mi.red{color:#b42318}
+.setup{padding:24px 18px;max-width:480px;margin:0 auto}
+.setup h2{font-size:19px;margin:8px 0}
+.setup p{color:#475467;font-size:14px;line-height:1.5}
+.setup textarea{width:100%;border:1px solid #d0d5dd;border-radius:10px;padding:10px;font-size:14px;font-family:ui-monospace,Consolas,monospace;min-height:84px}
+.btn{display:block;width:100%;border:none;border-radius:10px;background:#1a7f37;color:#fff;font-weight:700;font-size:15px;padding:13px;margin-top:12px}
+.err{color:#b42318;font-size:13px;margin-top:8px}
+.offline{background:#fffbeb;color:#854d0e;font-size:12.5px;font-weight:600;padding:7px 14px;text-align:center}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<div class="sheet" id="menu" hidden>
+  <div class="panel">
+    <h2>ATS Live</h2>
+    <button class="mi" id="mShare">Share app link (for HOD)</button>
+    <button class="mi" id="mInstall" hidden>Install app on this phone</button>
+    <button class="mi red" id="mReset">Change data link</button>
+    <button class="mi" id="mClose">Close</button>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var CFG_KEY = 'atsLive.cfg', DATA_KEY = 'atsLive.data.';
+  var EVERY = 20000;
+  var app = document.getElementById('app');
+  var cfg = null, state = { cur: '', today: '', days: [], filter: 'all', q: '', data: null, loading: false, err: '', lastSig: '', daysSig: '' };
+  var timer = null, deferredInstall = null;
+
+  // ---------- config: from the share link (#u=...&v=...) or saved on this phone ----------
+  function parseLink(text) {
+    text = String(text || '').trim();
+    try {
+      var url = new URL(text);
+      if (!/^script\.google(usercontent)?\.com$/.test(url.hostname)) return null;
+      var v = url.searchParams.get('v');
+      if (!v) return null;
+      return { u: url.origin + url.pathname, v: v };
+    } catch (e) { return null; }
+  }
+  function loadCfg() {
+    var h = location.hash.replace(/^#/, '');
+    if (h) {
+      var p = new URLSearchParams(h);
+      if (p.get('u') && p.get('v')) {
+        var c = parseLink(p.get('u') + '?v=' + encodeURIComponent(p.get('v')));
+        if (c) { localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
+      }
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+    try { cfg = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); } catch (e) { cfg = null; }
+  }
+  function shareLink() {
+    return location.origin + location.pathname + '#u=' + encodeURIComponent(cfg.u) + '&v=' + encodeURIComponent(cfg.v);
+  }
+
+  // ---------- helpers ----------
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function fmt(k) { var p = k.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
+  function dayLabel(k) {
+    if (k === state.today) return 'Today';
+    var t = new Date(state.today + 'T00:00:00'); t.setDate(t.getDate() - 1);
+    var y = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+    if (k === y) return 'Yesterday';
+    return fmt(k).slice(0, 5);
+  }
+  var toastT = null;
+  function toast(msg, ms) { var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove('show'); }, ms || 2000); }
+  var ICON_REFRESH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>';
+  var ICON_MENU = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
+  var ICON_SEARCH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+
+  // ---------- setup screen (first open without a link) ----------
+  function showSetup(msg) {
+    app.textContent = '';
+    var w = el('div', 'setup');
+    var logo = el('div', 'logo'); logo.style.width = '56px'; logo.style.height = '56px'; logo.style.borderRadius = '14px';
+    w.appendChild(logo);
+    w.appendChild(el('h2', null, 'ATS Live'));
+    w.appendChild(el('p', null, 'Paste the live link here (Smart Notepad → Settings → Live view → "Copy HOD link"). It is saved on this phone, you need to do this only once.'));
+    var ta = el('textarea'); ta.placeholder = 'https://script.google.com/macros/s/…/exec?v=…'; w.appendChild(ta);
+    var er = el('div', 'err', msg || ''); w.appendChild(er);
+    var b = el('button', 'btn', 'Open'); w.appendChild(b);
+    b.onclick = function () {
+      var c = parseLink(ta.value);
+      if (!c) { er.textContent = 'This is not the live link. It starts with https://script.google.com/macros/s/ and ends with ?v=…'; return; }
+      cfg = c; localStorage.setItem(CFG_KEY, JSON.stringify(c)); start();
+    };
+    app.appendChild(w);
+  }
+
+  // ---------- main screen (built once, then only updated) ----------
+  var ui = {};
+  function buildMain() {
+    app.textContent = '';
+    var top = el('div', 'top');
+    var bar = el('div', 'bar');
+    bar.appendChild(el('div', 'logo'));
+    var ttl = el('div', 'ttl');
+    ui.title = el('h1', null, 'ATS Live'); ttl.appendChild(ui.title);
+    var st = el('div', 'status'); ui.dot = el('span', 'dot'); ui.stat = el('span', null, 'Connecting…'); st.appendChild(ui.dot); st.appendChild(ui.stat); ttl.appendChild(st);
+    bar.appendChild(ttl);
+    ui.refresh = el('button', 'ib'); ui.refresh.innerHTML = ICON_REFRESH; ui.refresh.setAttribute('aria-label', 'Refresh');
+    ui.refresh.onclick = function () { load(true); };
+    var menuB = el('button', 'ib'); menuB.innerHTML = ICON_MENU; menuB.setAttribute('aria-label', 'Menu');
+    menuB.onclick = function () { document.getElementById('menu').hidden = false; };
+    bar.appendChild(ui.refresh); bar.appendChild(menuB);
+    top.appendChild(bar);
+    ui.dates = el('div', 'dates'); top.appendChild(ui.dates);
+    app.appendChild(top);
+    ui.offline = el('div', 'offline'); ui.offline.hidden = true; app.appendChild(ui.offline);
+
+    var s2 = el('div', 'sticky2');
+    ui.cards = el('div', 'cards'); s2.appendChild(ui.cards);
+    var se = el('div', 'search'); se.innerHTML = ICON_SEARCH;
+    ui.q = el('input'); ui.q.type = 'search'; ui.q.placeholder = 'Search vehicle (e.g. 9977)'; ui.q.setAttribute('autocomplete', 'off');
+    ui.q.oninput = function () { state.q = ui.q.value; renderList(); };
+    var qx = el('button', null, '×'); qx.setAttribute('aria-label', 'Clear'); qx.onclick = function () { ui.q.value = ''; state.q = ''; renderList(); };
+    se.appendChild(ui.q); se.appendChild(qx); s2.appendChild(se);
+    app.appendChild(s2);
+    ui.info = el('div', 'info'); app.appendChild(ui.info);
+    ui.list = el('div', 'list'); app.appendChild(ui.list);
+    for (var i = 0; i < 7; i++) ui.list.appendChild(el('div', 'sk'));
+    var fix = function () { s2.style.top = top.offsetHeight + 'px'; };
+    window.addEventListener('resize', fix); setTimeout(fix, 0);
+  }
+
+  var CARDS = [['all', 'Total', '#101828', '#fff'], ['PASS', 'PASS', '#166534', '#dcfce7'], ['FAIL', 'FAIL', '#991b1b', '#fee2e2'], ['HOLD', 'HOLD', '#5b21b6', '#ede9fe'], ['dsc', '✗ DSC', '#9d174d', '#fce7f3']];
+  function renderDates() {
+    var sig = state.today + '|' + state.days.join(',') + '|' + state.cur;
+    if (sig === state.daysSig) return;
+    state.daysSig = sig;
+    ui.dates.textContent = '';
+    state.days.forEach(function (k) {
+      var b = el('button', 'chip' + (k === state.cur ? ' on' : ''), dayLabel(k) + (k === state.today ? ' · ' + fmt(k).slice(0, 5) : ''));
+      b.title = fmt(k);
+      b.onclick = function () {
+        if (k === state.cur) return;
+        state.cur = k; state.auto = false; state.filter = 'all'; state.lastSig = ''; state.data = cached(k);
+        renderDates(); renderAll(); load(true);
+      };
+      ui.dates.appendChild(b);
+      if (k === state.cur) setTimeout(function () { b.scrollIntoView({ inline: 'nearest', block: 'nearest' }); }, 0);
+    });
+  }
+  function counts() { return (state.data && state.data.day && state.data.day.counts) || { total: 0, pass: 0, fail: 0, hold: 0, dsc: 0 }; }
+  function renderCards() {
+    var c = counts(); var val = { all: c.total, PASS: c.pass, FAIL: c.fail, HOLD: c.hold, dsc: c.dsc };
+    if (!ui.cardEls) {
+      ui.cardEls = {};
+      CARDS.forEach(function (x) {
+        var b = el('button', 'card'); b.style.color = x[2]; b.style.background = x[3];
+        var n = el('b', null, '0'); b.appendChild(n); b.appendChild(document.createTextNode(x[1]));
+        b.onclick = function () { state.filter = state.filter === x[0] || x[0] === 'all' ? 'all' : x[0]; renderCards(); renderList(); };
+        ui.cards.appendChild(b); ui.cardEls[x[0]] = { b: b, n: n };
+      });
+    }
+    CARDS.forEach(function (x) {
+      var o = ui.cardEls[x[0]]; var v = String(val[x[0]] || 0);
+      if (o.n.textContent !== v) o.n.textContent = v;
+      o.b.classList.toggle('on', state.filter === x[0] && x[0] !== 'all');
+    });
+  }
+  var rowEls = new Map(); // key -> {el, sig}
+  function visible() {
+    var rows = (state.data && state.data.day && state.data.day.rows) || [];
+    var f = state.filter, q = state.q.replace(/[^a-z0-9]/gi, '').toUpperCase();
+    return rows.filter(function (r) {
+      if (f === 'dsc' && !(r.dsc && r.dsc !== '✓')) return false;
+      if (f === 'HOLD' && !(r.kind === 'HOLD' || r.kind === 'ISSUE')) return false;
+      if ((f === 'PASS' || f === 'FAIL') && r.kind !== f) return false;
+      return !q || r.veh.indexOf(q) >= 0;
+    });
+  }
+  function renderList() {
+    if (!state.data) return;
+    var vis = visible();
+    var seen = new Set();
+    var prev = null;
+    vis.forEach(function (r) {
+      var key = r.veh + '#' + r.n;
+      var sig = r.n + '|' + r.st + '|' + r.dsc + '|' + r.kind;
+      var o = rowEls.get(key);
+      if (!o) {
+        var e = el('div', 'row');
+        e.appendChild(el('span', 'n')); e.appendChild(el('span', 'veh')); e.appendChild(el('span', 'dsc')); e.appendChild(el('span', 'st'));
+        o = { el: e, sig: '' }; rowEls.set(key, o);
+      }
+      if (o.sig !== sig) {
+        var c = o.el.children;
+        o.el.className = 'row k-' + r.kind;
+        c[0].textContent = r.n + '.'; c[1].textContent = r.veh;
+        c[2].textContent = r.dsc ? (r.dsc === '✓' ? '✓ DSC' : r.dsc === '✗' ? '✗ DSC' : '⚠ DSC') : '';
+        c[2].className = 'dsc' + (r.dsc === '✓' ? ' ok' : '');
+        c[3].textContent = r.st || 'Pending';
+        if (o.sig) { o.el.classList.add('flash'); (function (x) { setTimeout(function () { x.classList.remove('flash'); }, 1500); })(o.el); }
+        o.sig = sig;
+      }
+      seen.add(key);
+      var want = prev ? prev.nextSibling : ui.list.firstChild;
+      if (want !== o.el) ui.list.insertBefore(o.el, want);
+      prev = o.el;
+    });
+    rowEls.forEach(function (o, k) { if (!seen.has(k)) { o.el.remove(); if (!state.data.day.rows.some(function (r) { return r.veh + '#' + r.n === k; })) rowEls.delete(k); } });
+    ui.list.querySelectorAll('.sk,.empty').forEach(function (x) { x.remove(); });
+    if (!vis.length) {
+      var all = state.data.day.rows.length;
+      ui.list.appendChild(el('div', 'empty', all ? 'No vehicle matches.' : (state.cur === state.today ? 'No vehicles yet today.' : 'No vehicles on this day.')));
+    }
+    var c = counts();
+    ui.info.textContent = '';
+    ui.info.appendChild(el('span', null, fmt(state.cur) + (state.filter !== 'all' || state.q ? ' · showing ' + vis.length + ' of ' + c.total : '')));
+    ui.info.appendChild(el('span', null, (c.done ? 'DONE ' + c.done + ' · ' : '') + (c.pending ? 'Pending ' + c.pending : '')));
+  }
+  function renderStatus() {
+    var d = state.data;
+    if (state.err && !d) { ui.dot.className = 'dot off'; ui.stat.textContent = state.err; return; }
+    if (!d) { ui.dot.className = 'dot old'; ui.stat.textContent = 'Connecting…'; return; }
+    var fresh = d.last && d.last.at && (d.now - d.last.at) < 5 * 60000;
+    if (state.err) { ui.dot.className = 'dot off'; ui.stat.textContent = state.err + ' · saved list'; }
+    else if (fresh) { ui.dot.className = 'dot'; ui.stat.textContent = 'Live · updated ' + d.lastText; }
+    else { ui.dot.className = 'dot old'; ui.stat.textContent = d.last && d.last.at ? 'Office PC not sending · last ' + d.lastText : 'Waiting for the office PC'; }
+    ui.title.textContent = d.station || 'ATS Live';
+  }
+  function renderAll() { renderStatus(); renderCards(); if (state.data) renderList(); else { ui.list.textContent = ''; rowEls.clear(); for (var i = 0; i < 7; i++) ui.list.appendChild(el('div', 'sk')); } }
+
+  // ---------- data ----------
+  function cached(k) { try { return JSON.parse(localStorage.getItem(DATA_KEY + k) || 'null'); } catch (e) { return null; } }
+  function load(manual) {
+    if (!cfg || (state.loading && !manual)) return;
+    state.loading = true; ui.refresh.classList.add('spin');
+    var forDay = state.auto ? '' : state.cur;
+    var url = cfg.u + '?format=json&v=' + encodeURIComponent(cfg.v) + (forDay ? '&date=' + forDay : '') + '&t=' + Date.now();
+    fetch(url, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) {
+        if (/no access/i.test(j.error || '')) { localStorage.removeItem(CFG_KEY); cfg = null; showSetup('The view key is wrong or was changed. Paste the new link.'); return; }
+        var se = new Error(j.error || 'error'); se.server = true; throw se;
+      }
+      if (forDay && forDay !== state.cur) return; // user switched day meanwhile
+      state.err = '';
+      state.today = j.today; state.days = j.days;
+      if (state.auto || !state.cur || state.days.indexOf(state.cur) < 0) state.cur = j.date;
+      state.auto = false;
+      var sig = JSON.stringify(j.day) + j.lastText;
+      var changed = sig !== state.lastSig;
+      state.lastSig = sig; state.data = j;
+      try { localStorage.setItem(DATA_KEY + j.date, JSON.stringify(j)); localStorage.setItem(DATA_KEY + 'last', j.date); } catch (e) { /* full */ }
+      ui.offline.hidden = true;
+      renderDates(); renderStatus();
+      if (changed) { renderCards(); renderList(); }
+      if (manual === true) toast('Updated', 900);
+    }).catch(function (e) {
+      if (window.console) console.warn('ATS Live load failed:', e && e.message);
+      state.err = e && e.server ? 'Google error: ' + e.message : 'No internet';
+      ui.offline.hidden = !state.data; ui.offline.textContent = (e && e.server ? 'Could not read the Sheet' : 'No internet') + ' · showing the last saved list';
+      renderStatus();
+      if (!state.data) { ui.list.textContent = ''; rowEls.clear(); ui.list.appendChild(el('div', 'empty', 'Could not reach Google. Check internet and pull ↻ refresh.')); }
+    }).then(function () { state.loading = false; ui.refresh.classList.remove('spin'); });
+  }
+  function startTimer() { clearInterval(timer); timer = setInterval(function () { if (!document.hidden) load(false); }, EVERY); }
+
+  function start() {
+    buildMain();
+    var lastDay = localStorage.getItem(DATA_KEY + 'last');
+    var c = lastDay && cached(lastDay);
+    // show the last saved list at once, then ask Google (server decides which day is today)
+    if (c && c.day) { state.today = c.today; state.days = c.days || []; state.cur = c.date; state.data = c; state.lastSig = JSON.stringify(c.day) + c.lastText; renderDates(); }
+    state.auto = true;
+    renderAll(); load(false); startTimer();
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && cfg) load(false); });
+  window.addEventListener('online', function () { if (cfg) load(false); });
+
+  // ---------- menu ----------
+  var menu = document.getElementById('menu');
+  menu.addEventListener('click', function (e) { if (e.target === menu) menu.hidden = true; });
+  document.getElementById('mClose').onclick = function () { menu.hidden = true; };
+  document.getElementById('mShare').onclick = function () {
+    menu.hidden = true;
+    var link = shareLink();
+    if (navigator.share) navigator.share({ title: 'ATS Live', text: 'ATS live status', url: link }).catch(function () {});
+    else navigator.clipboard.writeText(link).then(function () { toast('Link copied'); }, function () { prompt('Copy this link', link); });
+  };
+  document.getElementById('mReset').onclick = function () {
+    menu.hidden = true;
+    if (!confirm('Remove the saved data link from this phone?')) return;
+    localStorage.removeItem(CFG_KEY); cfg = null; clearInterval(timer); showSetup();
+  };
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferredInstall = e; document.getElementById('mInstall').hidden = false; });
+  document.getElementById('mInstall').onclick = function () {
+    menu.hidden = true;
+    if (deferredInstall) { deferredInstall.prompt(); deferredInstall = null; document.getElementById('mInstall').hidden = true; }
+  };
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+  loadCfg();
+  if (cfg) start(); else showSetup();
+})();
+</script>
+</body>
+</html>
