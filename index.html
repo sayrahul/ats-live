@@ -474,7 +474,7 @@ button{cursor:pointer}
         var hd = el('div', 'dhead'); hd.appendChild(el('span', 'mono', r.veh)); var p = el('span', 'pill p-' + r.kind, label(r)); hd.appendChild(p); card.appendChild(hd);
         var kv = el('div', 'kv');
         var earlier = visits ? visits.filter(function (x) { return x.veh === r.veh && x.date !== S.cur; }) : null;
-        [['Serial', '#' + r.n], ['Total time', t.result ? dur(t.added, t.result) : (t.added && isPend(r) && S.cur === S.today ? dur(t.added, Date.now()) + ' so far' : '—')], ['Visit', earlier === null ? '…' : earlier.length ? 'Retest' : 'First']].forEach(function (x) {
+        [['Serial', '#' + r.n], r.meta && !t.added ? ['Test', r.meta.testType || '—'] : ['Total time', t.result ? dur(t.added, t.result) : (t.added && isPend(r) && S.cur === S.today ? dur(t.added, Date.now()) + ' so far' : '—')], ['Visit', earlier === null ? '…' : earlier.length ? 'Retest' : 'First']].forEach(function (x) {
           var d = el('div'); d.appendChild(el('span', null, x[0])); d.appendChild(el('b', null, x[1])); kv.appendChild(d);
         });
         card.appendChild(kv); body.appendChild(card);
@@ -484,6 +484,12 @@ button{cursor:pointer}
         if (t.pushed) steps.push(['Pushed', 'Data Ready For Production', t.pushed, '']);
         if (t.raw) steps.push(['Raw data pushed', 'Push Raw Data', t.raw, '']);
         if (t.test) steps.push(['Test data pushed', 'Push Test Data', t.test, '']);
+        if (r.meta && !t.added) {   // an old day rebuilt from its signed PDF
+          var sg = String(r.meta.signedAt || '').split(' ')[1] || '';
+          var h12 = sg ? (function (x) { var p = x.split(':'); var h = +p[0]; return (h % 12 || 12) + ':' + p[1] + ' ' + (h < 12 ? 'AM' : 'PM'); })(sg) : '';
+          steps.push(['Tested' + (r.meta.testType ? ' · ' + r.meta.testType : ''), r.meta.testNo ? 'Test No ' + r.meta.testNo : '', '', '']);
+          steps.push(['Result: ' + r.kind, h12 ? 'Report signed' : 'From the signed report', h12, r.kind === 'FAIL' ? 'f' : '']);
+        }
         if (t.result) steps.push(['Result: ' + (r.kind === 'ISSUE' ? 'HOLD' : r.kind), r.kind === 'ISSUE' || r.kind === 'HOLD' ? (r.st || '') : '', t.result, r.kind === 'FAIL' ? 'f' : r.kind === 'PASS' ? '' : 'h']);
         else if (isPend(r)) steps.push(['Now: ' + (STAGE[r.stage] || 'Pending'), 'Work in progress', 0, 'w']);
         var tl = el('div', 'card tl');
@@ -492,7 +498,7 @@ button{cursor:pointer}
           var it = el('div', 'it'); var rail = el('div', 'rail'); rail.appendChild(el('span', 'b ' + s[3])); if (i < steps.length - 1) rail.appendChild(el('span', 'ln'));
           it.appendChild(rail);
           var x = el('div', 'x'); x.appendChild(el('b', null, s[0])); if (s[1]) x.appendChild(el('small', null, s[1])); it.appendChild(x);
-          it.appendChild(el('span', 'tm', tm(s[2]))); tl.appendChild(it);
+          it.appendChild(el('span', 'tm', typeof s[2] === 'string' ? s[2] : tm(s[2]))); tl.appendChild(it);
         });
         body.appendChild(tl);
         body.appendChild(el('div', 'sec', 'Earlier visits'));
