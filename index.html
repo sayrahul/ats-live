@@ -164,6 +164,40 @@ html.dark .dsc.no{color:#f9a8d4}
 .setup textarea{width:100%;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:12px;padding:12px;font:13px var(--mono);min-height:90px}
 .setup .err{color:var(--fail);font-size:13px;margin-top:8px}
 .setup .btn{width:100%;margin-top:12px}
+/* which tab: Bookings = blue, Vehicles = green (tab, top stripe, headings, page tint) */
+body,.top{transition:background-color .25s ease}
+.tabs button{transition:background-color .2s ease,color .2s ease}
+.tabs button.on{box-shadow:none}
+body.tab-book .tabs button.on{background:#2563eb;color:#fff}body.tab-book .tabs button.on span{color:#dbeafe}
+body.tab-veh .tabs button.on{background:#16a34a;color:#fff}body.tab-veh .tabs button.on span{color:#dcfce7}
+.sum{border-top-width:4px}
+body.tab-book .sum{border-top-color:#2563eb}body.tab-veh .sum{border-top-color:#16a34a}
+body.tab-book .sec{color:#1d4ed8}body.tab-veh .sec{color:#15803d}
+body.tab-book,body.tab-book .top{background:#eef4ff}body.tab-veh,body.tab-veh .top{background:#effaf3}
+body.tab-book .tabs{background:#dde8fb}body.tab-veh .tabs{background:#dcefe2}
+html.dark body.tab-book .sum{border-top-color:#3b82f6}html.dark body.tab-veh .sum{border-top-color:#22c55e}
+html.dark body.tab-book .sec{color:#93c5fd}html.dark body.tab-veh .sec{color:#86efac}
+html.dark body.tab-book,html.dark body.tab-book .top{background:#0b1220}html.dark body.tab-veh,html.dark body.tab-veh .top{background:#0a130e}
+html.dark body.tab-book .tabs,html.dark body.tab-veh .tabs{background:var(--soft)}
+/* both tabs: same card, tiles, line, strip and list geometry */
+.big{height:36px;align-items:center}.big b{line-height:36px}
+.tiles,.btiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.tile,.btile{height:64px;min-height:64px;padding:8px 4px;box-sizing:border-box;border:1.5px solid transparent;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:inherit}
+.tile b,.btile b{font-size:20px;line-height:1.15;font-variant-numeric:tabular-nums}
+.tile span,.btile span{font-size:11.5px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tile.on,.btile.on{border-color:currentColor}
+.btile.vt{border:1.5px dashed var(--line)}.btile.vt.on{border:1.5px solid currentColor}
+.unpl{height:44px;box-sizing:border-box;width:100%}
+.unpl b,.unpl em{white-space:nowrap}.unpl em{overflow:hidden;text-overflow:ellipsis}
+.tile,.btile{padding-left:2px;padding-right:2px}.tile span,.btile span{font-size:11px;letter-spacing:-.1px}
+.btile.b-unp span{font-size:10.5px;letter-spacing:-.25px}
+.unpl.bview{cursor:default}.unpl.bview i{background:#94a3b8}
+.pc{height:62px;box-sizing:border-box;justify-content:center}
+.pc.ph{width:100%;flex:1 0 auto;color:var(--muted);font-size:12.5px;align-items:flex-start}
+.pc.b span i{background:var(--pend)}.pc.b.u span i{background:var(--unp)}
+.slide-l{animation:sl .22s ease-out}.slide-r{animation:sr .22s ease-out}
+@keyframes sl{from{transform:translateX(28px);opacity:.4}to{transform:none;opacity:1}}
+@keyframes sr{from{transform:translateX(-28px);opacity:.4}to{transform:none;opacity:1}}
 </style>
 </head>
 <body>
@@ -308,11 +342,13 @@ html.dark .dsc.no{color:#f9a8d4}
     for (var i = 0; i < 6; i++) ui.list.appendChild(el('div', 'sk'));
     // bookings tab (view only)
     var bs = el('div', 'sum');
-    var bbig = el('div', 'big'); ui.bTotal = el('b', null, '–'); ui.bLbl = el('span', null, 'bookings today'); bbig.appendChild(ui.bTotal); bbig.appendChild(ui.bLbl); bbig.appendChild(el('span', 'vo', 'View only')); bs.appendChild(bbig);
+    var bbig = el('div', 'big'); ui.bTotal = el('b', null, '–'); ui.bLbl = el('span', null, 'bookings today'); bbig.appendChild(ui.bTotal); bbig.appendChild(ui.bLbl); bs.appendChild(bbig);
     ui.bTiles = el('div', 'btiles'); bs.appendChild(ui.bTiles);
-    ui.bVoid = el('div', 'voidl'); bs.appendChild(ui.bVoid);
+    ui.bVoid = el('div', 'unpl bview'); ui.bVoid.innerHTML = '<i></i><b>View only</b><em>· Void not counted</em>'; bs.appendChild(ui.bVoid);
     ui.bookBox.appendChild(bs);
-    ui.bSec = el('div', 'sec', 'All bookings · Booking Summary'); ui.bookBox.appendChild(ui.bSec);
+    ui.bProgSec = el('div', 'sec'); ui.bookBox.appendChild(ui.bProgSec);
+    ui.bProg = el('div', 'prog'); ui.bookBox.appendChild(ui.bProg);
+    ui.bSec = el('div', 'sec', 'All bookings'); ui.bookBox.appendChild(ui.bSec);
     ui.bList = el('div', 'list'); ui.bookBox.appendChild(ui.bList);
     app.appendChild(ui.bookBox); app.appendChild(ui.vehBox);
     gestures();
@@ -321,11 +357,14 @@ html.dark .dsc.no{color:#f9a8d4}
     if (t === S.tab) return;
     S.tab = t; localStorage.setItem('atsLive.tab', t);
     renderTab(); window.scrollTo({ top: 0 });
+    var box = t === 'book' ? ui.bookBox : ui.vehBox;
+    box.classList.remove('slide-l', 'slide-r'); void box.offsetWidth; box.classList.add(t === 'book' ? 'slide-r' : 'slide-l');
   }
   function renderTab() {
     ui.tabB.book.classList.toggle('on', S.tab === 'book'); ui.tabB.veh.classList.toggle('on', S.tab === 'veh');
     ui.tabB.book.setAttribute('aria-pressed', S.tab === 'book' ? 'true' : 'false'); ui.tabB.veh.setAttribute('aria-pressed', S.tab === 'veh' ? 'true' : 'false');
     ui.bookBox.hidden = S.tab !== 'book'; ui.vehBox.hidden = S.tab !== 'veh';
+    document.body.classList.toggle('tab-book', S.tab === 'book'); document.body.classList.toggle('tab-veh', S.tab === 'veh');
   }
   function niceStatus(o) {
     o = String(o || '').trim(); if (!o) return '—';
@@ -351,23 +390,28 @@ html.dark .dsc.no{color:#f9a8d4}
     // fixed cards (shown with 0 too), like PASS / FAIL / HOLD / Pending; Void is shown but not counted
     var cnt = { 'b-ok': 0, 'b-new': 0, 'b-unp': 0, 'b-void': 0, 'b-other': 0 };
     bk.forEach(function (b) { cnt[bClass(b.order)]++; });
-    var cards = [['b-ok', 'Report printed'], ['b-new', 'New order'], ['b-unp', 'UnProcessed'], ['b-void', 'Void']];
-    if (cnt['b-other']) cards.splice(3, 0, ['b-other', 'Other']);
+    var cards = [['b-ok', 'Printed'], ['b-new', 'New order'], ['b-unp', 'Unprocessed'], ['b-void', 'Void']];
     ui.bTiles.textContent = '';
     cards.forEach(function (c2) {
       var t = el('button', 'btile ' + c2[0] + (c2[0] === 'b-void' ? ' vt' : '') + (S.bfilter === c2[0] ? ' on' : ''));
       t.appendChild(el('b', null, cnt[c2[0]])); t.appendChild(el('span', null, c2[1]));
-      if (c2[0] === 'b-void') t.appendChild(el('small', null, 'not counted'));
       t.setAttribute('aria-pressed', S.bfilter === c2[0] ? 'true' : 'false');
       t.onclick = function () { S.bfilter = S.bfilter === c2[0] ? '' : c2[0]; renderBookings(); };
       ui.bTiles.appendChild(t);
     });
-    ui.bTiles.style.gridTemplateColumns = 'repeat(' + Math.min(4, cards.length) + ', minmax(0, 1fr))';
-    ui.bVoid.hidden = true;
-    ui.bSec.textContent = S.bfilter ? (cards.filter(function (c2) { return c2[0] === S.bfilter; })[0] || ['', 'Bookings'])[1] + ' · ' + cnt[S.bfilter] + (S.bfilter === 'b-void' ? ' (not counted)' : '') : 'All bookings · Booking Summary';
+    ui.bSec.textContent = S.bfilter ? (cards.filter(function (c2) { return c2[0] === S.bfilter; })[0] || ['', 'Bookings'])[1] + ' · ' + cnt[S.bfilter] + (S.bfilter === 'b-void' ? ' (not counted)' : '') : 'All bookings · ' + (d ? (c.bookings || 0) : '');
     // list
     var rows = (d && d.rows) || [], unp = (d && d.unp) || [];
     var byVeh = {}; rows.forEach(function (r) { byVeh[r.veh] = r; });
+    var waiting = bk.filter(function (b) { return !isVoid(b.order) && !byVeh[b.veh]; });
+    ui.bProgSec.textContent = 'Waiting for lane · ' + waiting.length;
+    ui.bProg.textContent = '';
+    if (!waiting.length) ui.bProg.appendChild(el('div', 'pc ph', d ? 'All bookings are in lane' : '…'));
+    waiting.forEach(function (b) {
+      var w = el('div', 'pc b' + (/unprocess/i.test(b.order) ? ' u' : '')); w.appendChild(el('div', 'mono', b.veh));
+      var sp = el('span'); sp.appendChild(el('i')); sp.appendChild(document.createTextNode(niceStatus(b.order))); w.appendChild(sp);
+      ui.bProg.appendChild(w);
+    });
     var sent = {}; unp.forEach(function (u) { if (u.sent) sent[u.veh] = 1; });
     ui.bList.textContent = '';
     if (!d) { for (var i = 0; i < 6; i++) ui.bList.appendChild(el('div', 'sk')); return; }
@@ -414,15 +458,15 @@ html.dark .dsc.no{color:#f9a8d4}
     ui.totalLbl.textContent = S.cur === S.today ? 'vehicles today' : 'vehicles · ' + dmy(S.cur || S.today);
     var val = { PASS: c.pass, FAIL: c.fail, HOLD: c.hold, PEND: c.pending };
     Object.keys(ui.tiles).forEach(function (k) { ui.tiles[k].n.textContent = val[k]; ui.tiles[k].b.classList.toggle('on', S.filter === k); });
-    ui.unp.hidden = !c.unp && S.filter !== 'UNP';
+    ui.unp.hidden = false;
     ui.unp.querySelector('b').textContent = c.unp + ' Unprocessed';
     ui.unp.classList.toggle('on', S.filter === 'UNP');
     // in progress
     var rows = (d && d.rows) || [], unp = (d && d.unp) || [];
     var pend = rows.filter(isPend);
     ui.prog.textContent = '';
-    ui.progSec.hidden = ui.prog.hidden = !pend.length;
     ui.progSec.textContent = 'In progress · ' + pend.length;
+    if (!pend.length) ui.prog.appendChild(el('div', 'pc ph', d ? 'No vehicle in progress' : '…'));
     pend.forEach(function (r) {
       var b = el('button', 'pc'); b.appendChild(el('div', 'mono', r.veh));
       var s = el('span'); s.appendChild(el('i')); s.appendChild(document.createTextNode(STAGE[r.stage] || (r.kind === 'DONE' ? 'Test data pushed' : 'Pending'))); b.appendChild(s);
@@ -432,7 +476,7 @@ html.dark .dsc.no{color:#f9a8d4}
     var f = S.filter, vis;
     if (f === 'UNP') vis = unp.map(function (u) { return { n: '–', veh: u.veh, kind: 'UNP', st: '', sub: u.sent ? 'Sent to Backend' : 'Booking Summary · UnProcessed', unp: true }; });
     else vis = rows.filter(function (r) { return f === 'all' || (f === 'PASS' && r.kind === 'PASS') || (f === 'FAIL' && r.kind === 'FAIL') || (f === 'HOLD' && (r.kind === 'HOLD' || r.kind === 'ISSUE')) || (f === 'PEND' && isPend(r)); });
-    var names = { all: 'All vehicles · ' + c.total, PASS: 'PASS · ' + c.pass, FAIL: 'FAIL · ' + c.fail, HOLD: 'HOLD / Issue · ' + c.hold, PEND: 'Pending · ' + c.pending, UNP: 'Unprocessed · ' + c.unp + ' (not in Total)' };
+    var names = { all: 'All vehicles · ' + (d ? c.total : ''), PASS: 'PASS · ' + c.pass, FAIL: 'FAIL · ' + c.fail, HOLD: 'HOLD / Issue · ' + c.hold, PEND: 'Pending · ' + c.pending, UNP: 'Unprocessed · ' + c.unp + ' (not in Total)' };
     ui.listSec.textContent = names[f];
     if (!d) return;
     var seen = new Set(), prev = null;

@@ -1,6 +1,6 @@
 // ATS Live – keeps the app itself on the phone so it opens instantly, and shows PASS / FAIL alerts.
 // Live data is never cached here.
-const CACHE = 'ats-live-v3-4';
+const CACHE = 'ats-live-v3-6';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-180.png', './icons/favicon-32.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {
