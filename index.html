@@ -58,7 +58,8 @@ html.dark .dsc.no{color:#f9a8d4}
 .btiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .btile{border-radius:12px;padding:9px 4px;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center}
 .btile b{font-size:20px;font-variant-numeric:tabular-nums}.btile span{font-size:11.5px;font-weight:600;color:var(--muted)}
-.btile.vt{border:1px dashed var(--line)}.btile small{font-size:10.5px;color:var(--muted)}
+.btile{border:1.5px solid transparent}.btile.on{border-color:currentColor}
+.btile.vt{border:1px dashed var(--line)}.btile.vt.on{border:1.5px solid currentColor}.btile small{font-size:10.5px;color:var(--muted)}
 .voidl{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border:1px dashed var(--line);border-radius:12px;font-size:13px;color:var(--muted)}
 .voidl i{width:8px;height:8px;border-radius:50%;background:#94a3b8}.voidl b{color:var(--text)}
 .row:disabled{color:inherit;cursor:default}
@@ -121,6 +122,9 @@ html.dark .dsc.no{color:#f9a8d4}
 .dhead{display:flex;align-items:center;gap:10px}
 .dhead .mono{font-size:22px;flex:1}
 .kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}
+.info{margin-top:14px;display:flex;flex-direction:column;gap:2px}
+.ir{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:36px;border-top:1px solid var(--line);padding-top:6px;font-size:13.5px}
+.ir>span:first-child{color:var(--muted)}
 .kv div{background:var(--soft);border-radius:12px;padding:10px 11px}
 .kv span{display:block;font-size:11.5px;color:var(--muted)}.kv b{font-size:15px}
 .tl{padding:16px 16px 4px}
@@ -174,7 +178,7 @@ html.dark .dsc.no{color:#f9a8d4}
   var EVERY = 15000;
   var app = document.getElementById('app'), views = document.getElementById('views');
   var cfg = null, prefs = { theme: 'auto', size: 'M' };
-  var S = { cur: '', today: '', data: null, filter: 'all', err: '', loading: false, sig: '', auto: true, view: null, tab: localStorage.getItem('atsLive.tab') === 'book' ? 'book' : 'veh' };
+  var S = { bfilter: '', cur: '', today: '', data: null, filter: 'all', err: '', loading: false, sig: '', auto: true, view: null, tab: localStorage.getItem('atsLive.tab') === 'book' ? 'book' : 'veh' };
   var timer = null, ui = {}, rowEls = new Map();
 
   // ---------- small helpers ----------
@@ -344,20 +348,23 @@ html.dark .dsc.no{color:#f9a8d4}
     ui.bTotal.textContent = d ? (c.bookings || 0) : '–';
     ui.bLbl.textContent = S.cur === S.today ? 'bookings today' : 'bookings · ' + dmy(S.cur || S.today);
     var isVoid = function (o) { return /void|cancel/i.test(o || ''); };
-    // tiles: one per order status (Void is not counted)
-    var groups = {}, order = [];
-    bk.forEach(function (b) { if (isVoid(b.order)) return; var k = niceStatus(b.order); if (!groups[k]) { groups[k] = { n: 0, cls: bClass(b.order) }; order.push(k); } groups[k].n++; });
-    var rank = { 'b-ok': 0, 'b-new': 1, 'b-unp': 2, 'b-other': 3 };
-    order.sort(function (a, b) { return rank[groups[a].cls] - rank[groups[b].cls]; });
+    // fixed cards (shown with 0 too), like PASS / FAIL / HOLD / Pending; Void is shown but not counted
+    var cnt = { 'b-ok': 0, 'b-new': 0, 'b-unp': 0, 'b-void': 0, 'b-other': 0 };
+    bk.forEach(function (b) { cnt[bClass(b.order)]++; });
+    var cards = [['b-ok', 'Report printed'], ['b-new', 'New order'], ['b-unp', 'UnProcessed'], ['b-void', 'Void']];
+    if (cnt['b-other']) cards.splice(3, 0, ['b-other', 'Other']);
     ui.bTiles.textContent = '';
-    order.forEach(function (k) { var t = el('div', 'btile ' + groups[k].cls); t.appendChild(el('b', null, groups[k].n)); t.appendChild(el('span', null, k)); ui.bTiles.appendChild(t); });
-    // Void gets its own card too, marked "not counted"
-    var nv = bk.filter(function (b) { return isVoid(b.order); }).length;
-    if (nv) { var tv = el('div', 'btile b-void vt'); tv.appendChild(el('b', null, nv)); tv.appendChild(el('span', null, 'Void')); tv.appendChild(el('small', null, 'not counted')); ui.bTiles.appendChild(tv); }
-    var nt = ui.bTiles.children.length;
-    ui.bTiles.style.gridTemplateColumns = 'repeat(' + Math.max(1, Math.min(4, nt)) + ', minmax(0, 1fr))';
-    ui.bTiles.hidden = !nt;
+    cards.forEach(function (c2) {
+      var t = el('button', 'btile ' + c2[0] + (c2[0] === 'b-void' ? ' vt' : '') + (S.bfilter === c2[0] ? ' on' : ''));
+      t.appendChild(el('b', null, cnt[c2[0]])); t.appendChild(el('span', null, c2[1]));
+      if (c2[0] === 'b-void') t.appendChild(el('small', null, 'not counted'));
+      t.setAttribute('aria-pressed', S.bfilter === c2[0] ? 'true' : 'false');
+      t.onclick = function () { S.bfilter = S.bfilter === c2[0] ? '' : c2[0]; renderBookings(); };
+      ui.bTiles.appendChild(t);
+    });
+    ui.bTiles.style.gridTemplateColumns = 'repeat(' + Math.min(4, cards.length) + ', minmax(0, 1fr))';
     ui.bVoid.hidden = true;
+    ui.bSec.textContent = S.bfilter ? (cards.filter(function (c2) { return c2[0] === S.bfilter; })[0] || ['', 'Bookings'])[1] + ' · ' + cnt[S.bfilter] + (S.bfilter === 'b-void' ? ' (not counted)' : '') : 'All bookings · Booking Summary';
     // list
     var rows = (d && d.rows) || [], unp = (d && d.unp) || [];
     var byVeh = {}; rows.forEach(function (r) { byVeh[r.veh] = r; });
@@ -365,9 +372,11 @@ html.dark .dsc.no{color:#f9a8d4}
     ui.bList.textContent = '';
     if (!d) { for (var i = 0; i < 6; i++) ui.bList.appendChild(el('div', 'sk')); return; }
     if (!bk.length) { ui.bList.appendChild(el('div', 'empty', S.cur === S.today ? 'No bookings yet today (Booking Summary is read by the office PC).' : 'No bookings saved for this day.')); return; }
-    var n = 0;
+    var n = 0, shown = 0;
     bk.forEach(function (b) {
       var v = isVoid(b.order); if (!v) n++;
+      if (S.bfilter && bClass(b.order) !== S.bfilter) return;
+      shown++;
       var r = byVeh[b.veh];
       var sub = v ? 'Booking void' : r ? 'In lane · ' + label(r) : /unprocess/i.test(b.order) ? (sent[b.veh] ? 'Sent to Backend' : 'Not sent to Backend yet') : 'Not in lane yet';
       var e = el('button', 'row' + (v ? ' void' : ''));
@@ -379,6 +388,7 @@ html.dark .dsc.no{color:#f9a8d4}
       if (r) e.onclick = function () { openDetail(r); }; else e.disabled = true;
       ui.bList.appendChild(e);
     });
+    if (!shown) ui.bList.appendChild(el('div', 'empty', 'Nothing here.'));
   }
   function setFilter(f) { S.filter = S.filter === f ? 'all' : f; renderHome(); if (S.filter !== 'all') ui.listSec.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   function renderDays() {
@@ -480,7 +490,7 @@ html.dark .dsc.no{color:#f9a8d4}
   function goDay(k) {
     if (!k || k > S.today) return;
     if (k === S.cur) return;
-    S.cur = k; S.auto = false; S.filter = 'all'; S.sig = '';
+    S.cur = k; S.auto = false; S.filter = 'all'; S.bfilter = ''; S.sig = '';
     var c = cached(k);
     S.data = c && c.day ? c : (S.data ? Object.assign({}, S.data, { day: null }) : null);
     rowEls.forEach(function (o) { o.el.remove(); }); rowEls.clear();
@@ -492,8 +502,14 @@ html.dark .dsc.no{color:#f9a8d4}
     if (!cfg || (S.loading && !manual)) return Promise.resolve();
     S.loading = true;
     var forDay = S.auto ? '' : S.cur;
-    return api(forDay ? { date: forDay } : {}).then(function (j) {
+    var q = forDay ? { date: forDay } : {};
+    if (forDay && !manual && S.data && S.data.day && S.data.date === forDay && S.data.ver) q.since = S.data.ver;
+    return api(q).then(function (j) {
       if (!S.auto && forDay !== S.cur) return;
+      if (j.same) {   // nothing changed on this day: just the live dot
+        S.err = ''; S.today = j.today; S.data.last = j.last; S.data.now = j.now;
+        ui.offline.hidden = true; renderStatus(); return;
+      }
       S.err = ''; S.today = j.today;
       if (S.auto) { S.cur = j.date; S.auto = false; }
       var sig = JSON.stringify(j.day) + (j.last && j.last.at);
@@ -503,6 +519,7 @@ html.dark .dsc.no{color:#f9a8d4}
       renderDays(); renderStatus();
       if (changed) { renderHome(); badge(); if (S.view && S.view.refresh) S.view.refresh(); }
       checkKey();
+      preloadYesterday();
     }).catch(function (e) {
       if (e && e.server && /no access/i.test(e.message)) { localStorage.removeItem(CFG_KEY); cfg = null; showSetup('The link was changed. Open the new link.'); return; }
       S.err = e && e.server ? 'Sheet error' : 'No internet';
@@ -512,6 +529,13 @@ html.dark .dsc.no{color:#f9a8d4}
     }).then(function () { S.loading = false; });
   }
 
+  // keep yesterday ready, so the Yesterday chip opens at once
+  var preloaded = false;
+  function preloadYesterday() {
+    if (preloaded || !S.today) return; preloaded = true;
+    var y = addDays(S.today, -1);
+    setTimeout(function () { api({ date: y }).then(function (j) { try { localStorage.setItem(DATA_KEY + y, JSON.stringify(j)); } catch (e) { /* full */ } }).catch(function () { preloaded = false; }); }, 1500);
+  }
   // ---------- gestures: pull to refresh, swipe for days ----------
   function gestures() {
     var sx = 0, sy = 0, pulling = false, dy = 0, dx = 0, tracking = false;
@@ -578,9 +602,24 @@ html.dark .dsc.no{color:#f9a8d4}
         [['Serial', '#' + r.n], r.meta && !t.added ? ['Test', r.meta.testType || '—'] : ['Total time', t.result ? dur(t.added, t.result) : (t.added && isPend(r) && S.cur === S.today ? dur(t.added, Date.now()) + ' so far' : '—')], ['Visit', earlier === null ? '…' : earlier.length ? 'Retest' : 'First']].forEach(function (x) {
           var d = el('div'); d.appendChild(el('span', null, x[0])); d.appendChild(el('b', null, x[1])); kv.appendChild(d);
         });
-        card.appendChild(kv); body.appendChild(card);
+        card.appendChild(kv);
+        // booking + DSC
+        var bkList = (S.data && S.data.day && S.data.day.bookings) || [];
+        var bk = bkList.filter(function (b) { return b.veh === r.veh && !/void|cancel/i.test(b.order); })[0] || bkList.filter(function (b) { return b.veh === r.veh; })[0];
+        var info = el('div', 'info');
+        var addInfo = function (k, vEl) { var rr = el('div', 'ir'); rr.appendChild(el('span', null, k)); rr.appendChild(vEl); info.appendChild(rr); };
+        if (bk) { var bp = el('span', 'pill ' + bClass(bk.order), niceStatus(bk.order)); addInfo('Booking', bp); }
+        if (r.dsc) addInfo('DSC', el('span', 'dsc ' + r.dsc, r.dsc === 'ok' ? '✓ Signed report in folder' : '✗ Not signed yet'));
+        if (r.meta && r.meta.testNo) addInfo('Test No', el('b', null, r.meta.testNo));
+        if (info.children.length) card.appendChild(info);
+        body.appendChild(card);
         body.appendChild(el('div', 'sec', 'Timeline'));
         var steps = [];
+        if (bk) {
+          var btxt = String(bk.time || '').trim();
+          if (btxt) steps.push(['Booked', 'Booking Summary', btxt.length > 12 ? btxt.replace(/^\S+\s+/, '') || btxt : btxt, '']);
+          else if (bk.seen) steps.push(['Booked', 'First seen on Booking Summary', bk.seen, '']);
+        }
         if (t.added) steps.push(['Added to list', '', t.added, '']);
         if (t.pushed) steps.push(['Pushed', 'Data Ready For Production', t.pushed, '']);
         if (t.raw) steps.push(['Raw data pushed', 'Push Raw Data', t.raw, '']);

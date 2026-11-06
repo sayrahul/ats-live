@@ -1,6 +1,6 @@
 // ATS Live – keeps the app itself on the phone so it opens instantly, and shows PASS / FAIL alerts.
 // Live data is never cached here.
-const CACHE = 'ats-live-v3-3';
+const CACHE = 'ats-live-v3-4';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-180.png', './icons/favicon-32.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {
@@ -9,9 +9,12 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const u = new URL(e.request.url);
   if (e.request.method !== 'GET' || u.origin !== location.origin) return; // Google data goes straight to the network
-  // app files: network first (gets updates), phone copy when offline
-  e.respondWith(fetch(e.request).then((r) => { const c = r.clone(); caches.open(CACHE).then((x) => x.put(e.request, c)); return r; })
-    .catch(() => caches.match(e.request).then((r) => r || caches.match('./index.html'))));
+  // app files: open at once from the phone's copy, fetch the newer copy in the background for next time
+  e.respondWith(caches.open(CACHE).then((c) => c.match(e.request, { ignoreSearch: true }).then((hit) => {
+    const net = fetch(e.request).then((r) => { if (r && r.ok) c.put(e.request, r.clone()); return r; }).catch(() => hit || c.match('./index.html'));
+    if (hit) { e.waitUntil(net.catch(() => {})); return hit; }
+    return net;
+  })));
 });
 
 // ---- PASS / FAIL alert from the office PC ----
