@@ -48,6 +48,22 @@ button{cursor:pointer}
 .cal svg{width:16px;height:16px;color:var(--muted)}
 .cal input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
 .cal input::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
+.tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;background:var(--soft);border-radius:12px;padding:3px;margin-top:10px}
+.tabs button{height:36px;border:none;border-radius:10px;background:transparent;color:var(--muted);font-size:13.5px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px}
+.tabs button.on{background:var(--card);color:var(--text);font-weight:700;box-shadow:0 1px 2px rgba(15,23,42,.12)}
+.tabs button span{color:var(--muted);font-weight:600}
+.dsc{font-size:11px;font-weight:700;white-space:nowrap;flex:none}.dsc.ok{color:var(--pass)}.dsc.no{color:#be185d}
+html.dark .dsc.no{color:#f9a8d4}
+.vo{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--muted);background:var(--soft);border-radius:999px;padding:4px 9px}
+.btiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.btile{border-radius:12px;padding:9px 4px;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center}
+.btile b{font-size:20px;font-variant-numeric:tabular-nums}.btile span{font-size:11.5px;font-weight:600;color:var(--muted)}
+.btile.vt{border:1px dashed var(--line)}.btile small{font-size:10.5px;color:var(--muted)}
+.voidl{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border:1px dashed var(--line);border-radius:12px;font-size:13px;color:var(--muted)}
+.voidl i{width:8px;height:8px;border-radius:50%;background:#94a3b8}.voidl b{color:var(--text)}
+.row:disabled{color:inherit;cursor:default}
+.row.void{opacity:.55}.row.void .mono{text-decoration:line-through}
+.b-ok{color:var(--pass);background:var(--passBg)}.b-new{color:var(--pend);background:var(--pendBg)}.b-unp{color:var(--unp);background:var(--unpBg)}.b-void{color:var(--muted);background:var(--soft)}.b-other{color:var(--hold);background:var(--holdBg)}
 .ptr{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--muted);transition:height .2s}
 .ptr .sp{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--brand);border-radius:50%}
 .ptr.go .sp{animation:spin .7s linear infinite}
@@ -158,7 +174,7 @@ button{cursor:pointer}
   var EVERY = 15000;
   var app = document.getElementById('app'), views = document.getElementById('views');
   var cfg = null, prefs = { theme: 'auto', size: 'M' };
-  var S = { cur: '', today: '', data: null, filter: 'all', err: '', loading: false, sig: '', auto: true, view: null };
+  var S = { cur: '', today: '', data: null, filter: 'all', err: '', loading: false, sig: '', auto: true, view: null, tab: localStorage.getItem('atsLive.tab') === 'book' ? 'book' : 'veh' };
   var timer = null, ui = {}, rowEls = new Map();
 
   // ---------- small helpers ----------
@@ -254,6 +270,12 @@ button{cursor:pointer}
     });
     top.appendChild(bar);
     ui.days = el('div', 'days'); top.appendChild(ui.days);
+    ui.tabs = el('div', 'tabs'); ui.tabB = {};
+    [['book', 'Bookings'], ['veh', 'Vehicles']].forEach(function (x) {
+      var b = el('button'); b.innerHTML = x[1] + ' <span></span>'; b.onclick = function () { setTab(x[0]); };
+      ui.tabs.appendChild(b); ui.tabB[x[0]] = b;
+    });
+    top.appendChild(ui.tabs);
     app.appendChild(top);
     ui.ptr = el('div', 'ptr'); ui.ptr.innerHTML = '<span class="sp"></span><span>Pull to refresh</span>'; app.appendChild(ui.ptr);
     ui.nudge = el('div', 'nudge'); ui.nudge.hidden = true;
@@ -263,6 +285,7 @@ button{cursor:pointer}
     app.appendChild(ui.nudge);
     ui.offline = el('div', 'offline'); ui.offline.hidden = true; app.appendChild(ui.offline);
 
+    ui.vehBox = el('div'); ui.bookBox = el('div');
     var sum = el('div', 'sum');
     var big = el('div', 'big'); ui.total = el('b', null, '–'); ui.totalLbl = el('span', null, 'vehicles today'); big.appendChild(ui.total); big.appendChild(ui.totalLbl); sum.appendChild(big);
     var tiles = el('div', 'tiles'); ui.tiles = {};
@@ -273,13 +296,89 @@ button{cursor:pointer}
     sum.appendChild(tiles);
     ui.unp = el('button', 'unpl'); ui.unp.innerHTML = '<i></i><b></b><em>· not in Total</em><span class="chev">›</span>';
     ui.unp.onclick = function () { setFilter('UNP'); }; sum.appendChild(ui.unp);
-    app.appendChild(sum);
-    ui.progSec = el('div', 'sec'); app.appendChild(ui.progSec);
-    ui.prog = el('div', 'prog'); app.appendChild(ui.prog);
-    ui.listSec = el('div', 'sec'); app.appendChild(ui.listSec);
-    ui.list = el('div', 'list'); app.appendChild(ui.list);
+    ui.vehBox.appendChild(sum);
+    ui.progSec = el('div', 'sec'); ui.vehBox.appendChild(ui.progSec);
+    ui.prog = el('div', 'prog'); ui.vehBox.appendChild(ui.prog);
+    ui.listSec = el('div', 'sec'); ui.vehBox.appendChild(ui.listSec);
+    ui.list = el('div', 'list'); ui.vehBox.appendChild(ui.list);
     for (var i = 0; i < 6; i++) ui.list.appendChild(el('div', 'sk'));
+    // bookings tab (view only)
+    var bs = el('div', 'sum');
+    var bbig = el('div', 'big'); ui.bTotal = el('b', null, '–'); ui.bLbl = el('span', null, 'bookings today'); bbig.appendChild(ui.bTotal); bbig.appendChild(ui.bLbl); bbig.appendChild(el('span', 'vo', 'View only')); bs.appendChild(bbig);
+    ui.bTiles = el('div', 'btiles'); bs.appendChild(ui.bTiles);
+    ui.bVoid = el('div', 'voidl'); bs.appendChild(ui.bVoid);
+    ui.bookBox.appendChild(bs);
+    ui.bSec = el('div', 'sec', 'All bookings · Booking Summary'); ui.bookBox.appendChild(ui.bSec);
+    ui.bList = el('div', 'list'); ui.bookBox.appendChild(ui.bList);
+    app.appendChild(ui.bookBox); app.appendChild(ui.vehBox);
     gestures();
+  }
+  function setTab(t) {
+    if (t === S.tab) return;
+    S.tab = t; localStorage.setItem('atsLive.tab', t);
+    renderTab(); window.scrollTo({ top: 0 });
+  }
+  function renderTab() {
+    ui.tabB.book.classList.toggle('on', S.tab === 'book'); ui.tabB.veh.classList.toggle('on', S.tab === 'veh');
+    ui.tabB.book.setAttribute('aria-pressed', S.tab === 'book' ? 'true' : 'false'); ui.tabB.veh.setAttribute('aria-pressed', S.tab === 'veh' ? 'true' : 'false');
+    ui.bookBox.hidden = S.tab !== 'book'; ui.vehBox.hidden = S.tab !== 'veh';
+  }
+  function niceStatus(o) {
+    o = String(o || '').trim(); if (!o) return '—';
+    if (/^unprocessed$/i.test(o)) return 'UnProcessed';
+    var w = o.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }
+  function bClass(o) {
+    if (/void|cancel/i.test(o)) return 'b-void';
+    if (/unprocess/i.test(o)) return 'b-unp';
+    if (/new/i.test(o)) return 'b-new';
+    if (/print|process|complete|done/i.test(o)) return 'b-ok';
+    return 'b-other';
+  }
+  function renderBookings() {
+    var d = S.data && S.data.day, c = counts();
+    var bk = (d && d.bookings) || [];
+    ui.tabB.book.querySelector('span').textContent = d ? (c.bookings || 0) : '';
+    ui.tabB.veh.querySelector('span').textContent = d ? c.total : '';
+    ui.bTotal.textContent = d ? (c.bookings || 0) : '–';
+    ui.bLbl.textContent = S.cur === S.today ? 'bookings today' : 'bookings · ' + dmy(S.cur || S.today);
+    var isVoid = function (o) { return /void|cancel/i.test(o || ''); };
+    // tiles: one per order status (Void is not counted)
+    var groups = {}, order = [];
+    bk.forEach(function (b) { if (isVoid(b.order)) return; var k = niceStatus(b.order); if (!groups[k]) { groups[k] = { n: 0, cls: bClass(b.order) }; order.push(k); } groups[k].n++; });
+    var rank = { 'b-ok': 0, 'b-new': 1, 'b-unp': 2, 'b-other': 3 };
+    order.sort(function (a, b) { return rank[groups[a].cls] - rank[groups[b].cls]; });
+    ui.bTiles.textContent = '';
+    order.forEach(function (k) { var t = el('div', 'btile ' + groups[k].cls); t.appendChild(el('b', null, groups[k].n)); t.appendChild(el('span', null, k)); ui.bTiles.appendChild(t); });
+    // Void gets its own card too, marked "not counted"
+    var nv = bk.filter(function (b) { return isVoid(b.order); }).length;
+    if (nv) { var tv = el('div', 'btile b-void vt'); tv.appendChild(el('b', null, nv)); tv.appendChild(el('span', null, 'Void')); tv.appendChild(el('small', null, 'not counted')); ui.bTiles.appendChild(tv); }
+    var nt = ui.bTiles.children.length;
+    ui.bTiles.style.gridTemplateColumns = 'repeat(' + Math.max(1, Math.min(4, nt)) + ', minmax(0, 1fr))';
+    ui.bTiles.hidden = !nt;
+    ui.bVoid.hidden = true;
+    // list
+    var rows = (d && d.rows) || [], unp = (d && d.unp) || [];
+    var byVeh = {}; rows.forEach(function (r) { byVeh[r.veh] = r; });
+    var sent = {}; unp.forEach(function (u) { if (u.sent) sent[u.veh] = 1; });
+    ui.bList.textContent = '';
+    if (!d) { for (var i = 0; i < 6; i++) ui.bList.appendChild(el('div', 'sk')); return; }
+    if (!bk.length) { ui.bList.appendChild(el('div', 'empty', S.cur === S.today ? 'No bookings yet today (Booking Summary is read by the office PC).' : 'No bookings saved for this day.')); return; }
+    var n = 0;
+    bk.forEach(function (b) {
+      var v = isVoid(b.order); if (!v) n++;
+      var r = byVeh[b.veh];
+      var sub = v ? 'Booking void' : r ? 'In lane · ' + label(r) : /unprocess/i.test(b.order) ? (sent[b.veh] ? 'Sent to Backend' : 'Not sent to Backend yet') : 'Not in lane yet';
+      var e = el('button', 'row' + (v ? ' void' : ''));
+      e.innerHTML = '<span class="n"></span><span class="v"><span class="mono"></span><small></small></span><span class="pill"></span>';
+      e.querySelector('.n').textContent = v ? '–' : n;
+      e.querySelector('.mono').textContent = b.veh;
+      e.querySelector('small').textContent = sub;
+      var p = e.querySelector('.pill'); p.className = 'pill ' + bClass(b.order); p.textContent = niceStatus(b.order);
+      if (r) e.onclick = function () { openDetail(r); }; else e.disabled = true;
+      ui.bList.appendChild(e);
+    });
   }
   function setFilter(f) { S.filter = S.filter === f ? 'all' : f; renderHome(); if (S.filter !== 'all') ui.listSec.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   function renderDays() {
@@ -299,6 +398,7 @@ button{cursor:pointer}
   function counts() { return (S.data && S.data.day && S.data.day.counts) || { total: 0, pass: 0, fail: 0, hold: 0, pending: 0, unp: 0 }; }
   function renderHome() {
     if (!ui.tiles) return;
+    renderBookings();
     var c = counts(), d = S.data && S.data.day;
     ui.total.textContent = d ? c.total : '–';
     ui.totalLbl.textContent = S.cur === S.today ? 'vehicles today' : 'vehicles · ' + dmy(S.cur || S.today);
@@ -329,11 +429,11 @@ button{cursor:pointer}
     vis.forEach(function (r) {
       var key = (r.unp ? 'u:' : '') + r.veh + '#' + r.n;
       var sub = r.sub || (isPend(r) ? STAGE[r.stage] || '' : '');
-      var sig = r.n + '|' + r.kind + '|' + r.st + '|' + sub;
+      var sig = r.n + '|' + r.kind + '|' + r.st + '|' + sub + '|' + (r.dsc || '');
       var o = rowEls.get(key);
       if (!o) {
         var e = el('button', 'row');
-        e.innerHTML = '<span class="n"></span><span class="v"><span class="mono"></span><small></small></span><span class="pill"></span><span class="chev" aria-hidden="true">›</span>';
+        e.innerHTML = '<span class="n"></span><span class="v"><span class="mono"></span><small></small></span><span class="dsc"></span><span class="pill"></span><span class="chev" aria-hidden="true">›</span>';
         o = { el: e, sig: '', r: r }; rowEls.set(key, o);
         e.onclick = function () { if (!o.r.unp) openDetail(o.r); };
       }
@@ -344,6 +444,7 @@ button{cursor:pointer}
         q.querySelector('.mono').textContent = r.veh;
         var sm = q.querySelector('small'); sm.textContent = sub; sm.hidden = !sub;
         var p = q.querySelector('.pill'); p.className = 'pill p-' + r.kind; p.textContent = label(r);
+        var ds = q.querySelector('.dsc'); ds.className = 'dsc ' + (r.dsc || ''); ds.textContent = r.dsc === 'ok' ? '✓ DSC' : r.dsc === 'no' ? '✗ DSC' : ''; ds.hidden = !r.dsc;
         q.querySelector('.chev').hidden = !!r.unp;
         if (o.sig) { q.classList.add('flash'); setTimeout(function () { q.classList.remove('flash'); }, 1500); }
         o.sig = sig;
@@ -433,9 +534,9 @@ button{cursor:pointer}
         ui.ptr.classList.add('go'); ui.ptr.lastChild.textContent = 'Updating…'; ui.ptr.style.height = '44px';
         load(true).then(function () { ui.ptr.classList.remove('go'); ui.ptr.style.height = '0'; });
       } else ui.ptr.style.height = '0';
-      // swipe left = older day, right = newer day (not on the scrolling strips)
-      if (!e.target.closest('.prog,.days') && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8 && S.cur) {
-        if (dx < 0) goDay(addDays(S.cur, -1)); else if (S.cur < S.today) goDay(addDays(S.cur, 1));
+      // swipe right = Bookings (left tab), swipe left = Vehicles (not on the scrolling strips)
+      if (!e.target.closest('.prog,.days') && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) {
+        setTab(dx > 0 ? 'book' : 'veh');
       }
     });
   }
@@ -668,7 +769,7 @@ button{cursor:pointer}
     var lastDay = localStorage.getItem(DATA_KEY + 'last'), c = lastDay && cached(lastDay);
     if (c && c.day) { S.today = c.today; S.cur = c.date; S.data = c; S.sig = JSON.stringify(c.day) + (c.last && c.last.at); }
     S.auto = true;
-    renderDays(); renderStatus(); renderHome();
+    renderDays(); renderStatus(); renderTab(); renderHome();
     load(false);
     clearInterval(timer); timer = setInterval(function () { if (!document.hidden) load(false); }, EVERY);
   }
