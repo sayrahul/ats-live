@@ -196,6 +196,28 @@ html.dark body.tab-book .tabs,html.dark body.tab-veh .tabs{background:var(--soft
 .pc.ph{width:100%;flex:1 0 auto;color:var(--muted);font-size:12.5px;align-items:flex-start}
 .pc.b span i{background:var(--pend)}.pc.b.u span i{background:var(--unp)}
 .slide-l{animation:sl .22s ease-out}.slide-r{animation:sr .22s ease-out}
+/* AFMS tab: orange */
+.tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
+body.tab-afms .tabs button.on{background:#ea580c;color:#fff}body.tab-afms .tabs button.on span{color:#ffedd5}
+body.tab-afms .sum{border-top-color:#ea580c}body.tab-afms .sec{color:#c2410c}
+body.tab-afms,body.tab-afms .top{background:#fff7ed}body.tab-afms .tabs{background:#fde3cc}
+html.dark body.tab-afms .sum{border-top-color:#f97316}html.dark body.tab-afms .sec{color:#fdba74}
+html.dark body.tab-afms,html.dark body.tab-afms .top{background:#140c05}html.dark body.tab-afms .tabs{background:var(--soft)}
+.btile.a-heavy{color:#c2410c;background:#ffedd5}.btile.a-light{color:#1d4ed8;background:#dbeafe}
+.btile.a-rep{color:#15803d;background:#dcfce7}.btile.a-norep{color:#b45309;background:#fef3c7}
+.btile.a-am,.btile.a-pm{color:#334155;background:#f1f5f9}
+html.dark .btile.a-heavy{background:#3b1d0a;color:#fdba74}html.dark .btile.a-light{background:#0f1f3d;color:#93c5fd}
+html.dark .btile.a-rep{background:#0d2a17;color:#86efac}html.dark .btile.a-norep{background:#33240a;color:#fcd34d}
+html.dark .btile.a-am,html.dark .btile.a-pm{background:var(--soft);color:var(--text)}
+.unpl.aline i{background:#f97316}
+.pc.slot span i{background:#f97316}
+.row.arow .n.slot{width:40px;display:flex;flex-direction:column;align-items:flex-start;line-height:1.1}
+.row.arow .n.slot b{font-size:13px;color:#c2410c}.row.arow .n.slot small{font-size:10px;color:var(--muted)}
+html.dark .row.arow .n.slot b{color:#fdba74}
+.pill.a-signed{color:#4338ca;background:#e0e7ff}.pill.a-reported{color:#15803d;background:#dcfce7}
+.pill.a-notreported{color:#b45309;background:#fef3c7}.pill.a-booked{color:#475569;background:#f1f5f9}
+html.dark .pill.a-signed{background:#1e1b4b;color:#c7d2fe}html.dark .pill.a-reported{background:#0d2a17;color:#86efac}
+html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a-booked{background:var(--soft);color:var(--muted)}
 @keyframes sl{from{transform:translateX(28px);opacity:.4}to{transform:none;opacity:1}}
 @keyframes sr{from{transform:translateX(-28px);opacity:.4}to{transform:none;opacity:1}}
 </style>
@@ -207,12 +229,14 @@ html.dark body.tab-book .tabs,html.dark body.tab-veh .tabs{background:var(--soft
 <script>
 (function () {
   'use strict';
-  var VERSION = 'v3';
+  var VERSION = 'v3.7';
   var CFG_KEY = 'atsLive.cfg', DATA_KEY = 'atsLive.data.', PREF_KEY = 'atsLive.prefs', PUSH_KEY = 'atsLive.push';
   var EVERY = 15000;
   var app = document.getElementById('app'), views = document.getElementById('views');
   var cfg = null, prefs = { theme: 'auto', size: 'M' };
-  var S = { bfilter: '', cur: '', today: '', data: null, filter: 'all', err: '', loading: false, sig: '', auto: true, view: null, tab: localStorage.getItem('atsLive.tab') === 'book' ? 'book' : 'veh' };
+  var S = { bfilter: '', cur: '', today: '', data: null, filter: 'all', err: '', loading: false, sig: '', auto: true, view: null, tab: ['afms', 'book', 'veh'].indexOf(localStorage.getItem('atsLive.tab')) >= 0 ? localStorage.getItem('atsLive.tab') : 'veh', afDay: '', afFilter: '', afms: null };
+  var TABS = ['afms', 'book', 'veh'];
+  try { S.afms = JSON.parse(localStorage.getItem('atsLive.afms') || 'null'); } catch (e) { S.afms = null; }
   var timer = null, ui = {}, rowEls = new Map();
 
   // ---------- small helpers ----------
@@ -309,7 +333,7 @@ html.dark body.tab-book .tabs,html.dark body.tab-veh .tabs{background:var(--soft
     top.appendChild(bar);
     ui.days = el('div', 'days'); top.appendChild(ui.days);
     ui.tabs = el('div', 'tabs'); ui.tabB = {};
-    [['book', 'Bookings'], ['veh', 'Vehicles']].forEach(function (x) {
+    [['afms', 'AFMS'], ['book', 'Bookings'], ['veh', 'Vehicles']].forEach(function (x) {
       var b = el('button'); b.innerHTML = x[1] + ' <span></span>'; b.onclick = function () { setTab(x[0]); };
       ui.tabs.appendChild(b); ui.tabB[x[0]] = b;
     });
@@ -350,21 +374,113 @@ html.dark body.tab-book .tabs,html.dark body.tab-veh .tabs{background:var(--soft
     ui.bProg = el('div', 'prog'); ui.bookBox.appendChild(ui.bProg);
     ui.bSec = el('div', 'sec', 'All bookings'); ui.bookBox.appendChild(ui.bSec);
     ui.bList = el('div', 'list'); ui.bookBox.appendChild(ui.bList);
-    app.appendChild(ui.bookBox); app.appendChild(ui.vehBox);
+    // AFMS tab (Current Booking + Upcoming, read by the office PC on AFMS)
+    ui.afBox = el('div');
+    var as = el('div', 'sum');
+    var abig = el('div', 'big'); ui.aTotal = el('b', null, '–'); ui.aLbl = el('span', null, 'AFMS bookings today'); abig.appendChild(ui.aTotal); abig.appendChild(ui.aLbl); as.appendChild(abig);
+    ui.aTiles = el('div', 'btiles'); as.appendChild(ui.aTiles);
+    ui.aLine = el('div', 'unpl bview aline'); ui.aLine.innerHTML = '<i></i><b></b><em></em>'; as.appendChild(ui.aLine);
+    ui.afBox.appendChild(as);
+    ui.aProgSec = el('div', 'sec', 'By slot'); ui.afBox.appendChild(ui.aProgSec);
+    ui.aProg = el('div', 'prog'); ui.afBox.appendChild(ui.aProg);
+    ui.aSec = el('div', 'sec', 'All AFMS bookings'); ui.afBox.appendChild(ui.aSec);
+    ui.aList = el('div', 'list'); ui.afBox.appendChild(ui.aList);
+    app.appendChild(ui.afBox); app.appendChild(ui.bookBox); app.appendChild(ui.vehBox);
     gestures();
   }
   function setTab(t) {
     if (t === S.tab) return;
+    var from = TABS.indexOf(S.tab);
     S.tab = t; localStorage.setItem('atsLive.tab', t);
-    renderTab(); window.scrollTo({ top: 0 });
-    var box = t === 'book' ? ui.bookBox : ui.vehBox;
-    box.classList.remove('slide-l', 'slide-r'); void box.offsetWidth; box.classList.add(t === 'book' ? 'slide-r' : 'slide-l');
+    renderTab(); renderDays(); window.scrollTo({ top: 0 });
+    var box = t === 'afms' ? ui.afBox : t === 'book' ? ui.bookBox : ui.vehBox;
+    box.classList.remove('slide-l', 'slide-r'); void box.offsetWidth; box.classList.add(TABS.indexOf(t) < from ? 'slide-r' : 'slide-l');
   }
   function renderTab() {
-    ui.tabB.book.classList.toggle('on', S.tab === 'book'); ui.tabB.veh.classList.toggle('on', S.tab === 'veh');
-    ui.tabB.book.setAttribute('aria-pressed', S.tab === 'book' ? 'true' : 'false'); ui.tabB.veh.setAttribute('aria-pressed', S.tab === 'veh' ? 'true' : 'false');
-    ui.bookBox.hidden = S.tab !== 'book'; ui.vehBox.hidden = S.tab !== 'veh';
-    document.body.classList.toggle('tab-book', S.tab === 'book'); document.body.classList.toggle('tab-veh', S.tab === 'veh');
+    TABS.forEach(function (t) {
+      ui.tabB[t].classList.toggle('on', S.tab === t); ui.tabB[t].setAttribute('aria-pressed', S.tab === t ? 'true' : 'false');
+      document.body.classList.toggle('tab-' + t, S.tab === t);
+    });
+    ui.afBox.hidden = S.tab !== 'afms'; ui.bookBox.hidden = S.tab !== 'book'; ui.vehBox.hidden = S.tab !== 'veh';
+  }
+  // ---------- AFMS tab ----------
+  var HEAVY = /HMV|MMV|MCV|HCV|HGV|heavy|bus|truck/i;
+  function slotMin(s) { var m = String(s || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i); if (!m) return 9999; var h = +m[1] % 12; if (/pm/i.test(m[3])) h += 12; return h * 60 + +m[2]; }
+  function slotStart(s) { var m = String(s || '').match(/(\d{1,2}:\d{2})\s*(AM|PM)/i); return m ? { t: m[1].replace(/^0/, ''), ap: m[2].toUpperCase() } : { t: '–', ap: '' }; }
+  function slotName(s) { var a = slotStart(s); return a.t + ' ' + a.ap; }
+  function afRows(day) { return ((S.afms && S.afms.rows) || []).filter(function (r) { return r.d === day; }).sort(function (a, b) { return slotMin(a.slot) - slotMin(b.slot) || (a.veh < b.veh ? -1 : 1); }); }
+  function afStatus(r, day) { return day > S.today ? 'Booked' : r.signed ? 'Signed' : r.rep ? 'Reported' : 'Not reported'; }
+  function renderAfms() {
+    if (!ui.afBox) return;
+    var day = S.afDay || S.today, isToday = day === S.today, has = !!S.afms;
+    var rows = afRows(day);
+    var heavy = rows.filter(function (r) { return HEAVY.test(r.cat); }), light = rows.filter(function (r) { return !HEAVY.test(r.cat); });
+    var todayN = afRows(S.today).length;
+    ui.tabB.afms.querySelector('span').textContent = has ? todayN : '';
+    ui.aTotal.textContent = has ? rows.length : '–';
+    ui.aLbl.textContent = isToday ? 'AFMS bookings today' : (day === addDays(S.today, 1) ? 'bookings tomorrow · ' : 'bookings · ') + dMon(day);
+    var am = rows.filter(function (r) { return slotMin(r.slot) < 720; }).length;
+    var cards = isToday
+      ? [['heavy', 'MMV / HMV', heavy.length], ['light', '3W / LMV', light.length], ['rep', 'Reported', rows.filter(function (r) { return r.rep; }).length], ['norep', 'Not reported', rows.filter(function (r) { return !r.rep; }).length]]
+      : [['heavy', 'MMV / HMV', heavy.length], ['light', '3W / LMV', light.length], ['am', 'Morning', am], ['pm', 'Afternoon', rows.length - am]];
+    if (cards.map(function (c) { return c[0]; }).indexOf(S.afFilter) < 0) S.afFilter = '';
+    ui.aTiles.textContent = '';
+    cards.forEach(function (c2) {
+      var t = el('button', 'btile a-' + c2[0] + (S.afFilter === c2[0] ? ' on' : ''));
+      t.appendChild(el('b', null, has ? c2[2] : '–')); t.appendChild(el('span', null, c2[1]));
+      t.setAttribute('aria-pressed', S.afFilter === c2[0] ? 'true' : 'false');
+      t.onclick = function () { S.afFilter = S.afFilter === c2[0] ? '' : c2[0]; renderAfms(); };
+      ui.aTiles.appendChild(t);
+    });
+    // line: signed + next slot (today) / busiest slot (other days)
+    var bySlot = {}; rows.forEach(function (r) { var k = slotName(r.slot); (bySlot[k] = bySlot[k] || { m: slotMin(r.slot), n: 0, h: 0 }); bySlot[k].n++; if (HEAVY.test(r.cat)) bySlot[k].h++; });
+    var slots = Object.keys(bySlot).map(function (k) { return { k: k, m: bySlot[k].m, n: bySlot[k].n, h: bySlot[k].h }; }).sort(function (a, b) { return a.m - b.m; });
+    var lb = ui.aLine.querySelector('b'), le = ui.aLine.querySelector('em');
+    if (!has) { lb.textContent = 'Waiting for the office PC'; le.textContent = '· AFMS must be open there'; }
+    else if (isToday) {
+      var now = new Date(), nm = now.getHours() * 60 + now.getMinutes();
+      var nx = slots.filter(function (x) { return x.m > nm; })[0];
+      lb.textContent = rows.filter(function (r) { return r.signed; }).length + ' Form 69 signed';
+      le.textContent = nx ? '· next slot ' + nx.k + ' (' + nx.n + ')' : '· all slots started';
+    } else {
+      var top = slots.slice().sort(function (a, b) { return b.n - a.n || a.m - b.m; })[0];
+      lb.textContent = top ? 'Busiest ' + top.k : 'No bookings';
+      le.textContent = top ? '· ' + top.n + ' vehicles' + (top.h ? ', ' + top.h + ' heavy' : '') : '';
+    }
+    // slot strip
+    ui.aProgSec.textContent = 'By slot · ' + slots.length;
+    ui.aProg.textContent = '';
+    if (!slots.length) ui.aProg.appendChild(el('div', 'pc ph', has ? 'No bookings on this day' : '…'));
+    slots.forEach(function (x) {
+      var w = el('div', 'pc slot'); w.appendChild(el('div', 'mono', x.k));
+      var sp = el('span'); sp.appendChild(el('i')); sp.appendChild(document.createTextNode(x.n + ' total' + (x.h ? ' · ' + x.h + ' heavy' : ''))); w.appendChild(sp);
+      ui.aProg.appendChild(w);
+    });
+    // list
+    var f = S.afFilter;
+    var vis = rows.filter(function (r) {
+      return !f || (f === 'heavy' && HEAVY.test(r.cat)) || (f === 'light' && !HEAVY.test(r.cat)) || (f === 'rep' && r.rep) || (f === 'norep' && !r.rep) || (f === 'am' && slotMin(r.slot) < 720) || (f === 'pm' && slotMin(r.slot) >= 720);
+    });
+    var age = S.afms ? (day > S.today ? S.afms.upAt : S.afms.at) : 0;
+    ui.aSec.textContent = (f ? (cards.filter(function (c2) { return c2[0] === f; })[0] || ['', 'AFMS'])[1] : 'All AFMS bookings') + ' · ' + vis.length + (age ? ' · read ' + tm(age) : '');
+    ui.aList.textContent = '';
+    if (!has) { for (var i = 0; i < 6; i++) ui.aList.appendChild(el('div', 'sk')); return; }
+    if (!vis.length) { ui.aList.appendChild(el('div', 'empty', rows.length ? 'Nothing here.' : (day > S.today ? 'No AFMS bookings read for this day yet.' : 'No AFMS bookings read today yet (AFMS must be open on the office PC).'))); return; }
+    var lastSlot = '';
+    var byVeh = {}; (((S.data && S.data.date === S.today && S.data.day) || {}).rows || []).forEach(function (r) { byVeh[r.veh] = r; });
+    vis.forEach(function (r) {
+      var st = afStatus(r, day), ss = slotStart(r.slot), sk = ss.t + ss.ap;
+      var e = el('button', 'row arow');
+      e.innerHTML = '<span class="n slot"><b></b><small></small></span><span class="v"><span class="mono"></span><small></small></span><span class="pill"></span>';
+      if (sk !== lastSlot) { e.querySelector('.slot b').textContent = ss.t; e.querySelector('.slot small').textContent = ss.ap; }
+      lastSlot = sk;
+      e.querySelector('.mono').textContent = r.veh;
+      e.querySelector('.v small').textContent = r.cat || '—';
+      var p = e.querySelector('.pill'); p.className = 'pill a-' + st.replace(/\s+/g, '').toLowerCase(); p.textContent = st;
+      var lr = isToday && byVeh[r.veh];
+      if (lr) e.onclick = function () { openDetail(lr); }; else e.disabled = true;
+      ui.aList.appendChild(e);
+    });
   }
   function niceStatus(o) {
     o = String(o || '').trim(); if (!o) return '—';
@@ -438,6 +554,20 @@ html.dark body.tab-book .tabs,html.dark body.tab-veh .tabs{background:var(--soft
   function renderDays() {
     ui.days.textContent = '';
     if (!S.today) return;
+    if (S.tab === 'afms') {
+      var tmw = addDays(S.today, 1), cur = S.afDay || S.today;
+      var ks = [S.today, tmw]; if (ks.indexOf(cur) < 0) ks.push(cur);
+      ks.forEach(function (k) {
+        var b = el('button', 'chip' + (k === cur ? ' on' : ''), k === S.today ? 'Today' : k === tmw ? 'Tomorrow' : dMon(k));
+        b.onclick = function () { S.afDay = k; S.afFilter = ''; renderDays(); renderAfms(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+        ui.days.appendChild(b);
+      });
+      var acal = el('label', 'cal'); acal.innerHTML = IC.cal; acal.setAttribute('aria-label', 'Pick a date');
+      var ainp = el('input'); ainp.type = 'date'; ainp.min = S.today; ainp.max = addDays(S.today, 31); ainp.value = cur; ainp.setAttribute('aria-label', 'Pick a date');
+      ainp.onchange = function () { if (ainp.value && ainp.value >= S.today) { S.afDay = ainp.value; S.afFilter = ''; renderDays(); renderAfms(); } };
+      acal.appendChild(ainp); ui.days.appendChild(acal);
+      return;
+    }
     var y = addDays(S.today, -1);
     var keys = [S.today, y];
     if (S.cur && keys.indexOf(S.cur) < 0) keys.push(S.cur);
@@ -452,7 +582,7 @@ html.dark body.tab-book .tabs,html.dark body.tab-veh .tabs{background:var(--soft
   function counts() { return (S.data && S.data.day && S.data.day.counts) || { total: 0, pass: 0, fail: 0, hold: 0, pending: 0, unp: 0 }; }
   function renderHome() {
     if (!ui.tiles) return;
-    renderBookings();
+    renderBookings(); renderAfms();
     var c = counts(), d = S.data && S.data.day;
     ui.total.textContent = d ? c.total : '–';
     ui.totalLbl.textContent = S.cur === S.today ? 'vehicles today' : 'vehicles · ' + dmy(S.cur || S.today);
@@ -556,7 +686,8 @@ html.dark body.tab-book .tabs,html.dark body.tab-veh .tabs{background:var(--soft
       }
       S.err = ''; S.today = j.today;
       if (S.auto) { S.cur = j.date; S.auto = false; }
-      var sig = JSON.stringify(j.day) + (j.last && j.last.at);
+      if (j.afms) { S.afms = j.afms; try { localStorage.setItem('atsLive.afms', JSON.stringify(j.afms)); } catch (e) { /* full */ } }
+      var sig = JSON.stringify(j.day) + (j.last && j.last.at) + JSON.stringify(j.afms || null);
       var changed = sig !== S.sig; S.sig = sig; S.data = j;
       try { localStorage.setItem(DATA_KEY + j.date, JSON.stringify(j)); localStorage.setItem(DATA_KEY + 'last', j.date); } catch (e) { /* full */ }
       ui.offline.hidden = true;
@@ -604,7 +735,8 @@ html.dark body.tab-book .tabs,html.dark body.tab-veh .tabs{background:var(--soft
       } else ui.ptr.style.height = '0';
       // swipe right = Bookings (left tab), swipe left = Vehicles (not on the scrolling strips)
       if (!e.target.closest('.prog,.days') && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) {
-        setTab(dx > 0 ? 'book' : 'veh');
+        var ti = TABS.indexOf(S.tab) + (dx > 0 ? -1 : 1);
+        if (ti >= 0 && ti < TABS.length) setTab(TABS[ti]);
       }
     });
   }
