@@ -197,6 +197,8 @@ html.dark body.tab-book .tabs,html.dark body.tab-veh .tabs{background:var(--soft
 .pc.b span i{background:var(--pend)}.pc.b.u span i{background:var(--unp)}
 .slide-l{animation:sl .22s ease-out}.slide-r{animation:sr .22s ease-out}
 /* AFMS tab: orange */
+.row.arow .v small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sec.asec>span.stale{color:#b45309}
 .sec.asec{display:flex;align-items:center;gap:8px}.sec.asec>span:first-child{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .atog{display:flex;gap:4px;flex:none}
 .atog .tg{height:26px;padding:0 9px;border-radius:999px;border:1px solid #fed7aa;background:var(--card);color:#9a3412;font:700 11px var(--font,inherit);letter-spacing:0;text-transform:none}
@@ -234,7 +236,7 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
 <script>
 (function () {
   'use strict';
-  var VERSION = 'v3.8';
+  var VERSION = 'v3.9';
   var CFG_KEY = 'atsLive.cfg', DATA_KEY = 'atsLive.data.', PREF_KEY = 'atsLive.prefs', PUSH_KEY = 'atsLive.push';
   var EVERY = 15000;
   var app = document.getElementById('app'), views = document.getElementById('views');
@@ -415,7 +417,23 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
   function slotStart(s) { var m = String(s || '').match(/(\d{1,2}:\d{2})\s*(AM|PM)/i); return m ? { t: m[1].replace(/^0/, ''), ap: m[2].toUpperCase() } : { t: '–', ap: '' }; }
   function slotName(s) { var a = slotStart(s); return a.t + ' ' + a.ap; }
   function afRows(day) { return ((S.afms && S.afms.rows) || []).filter(function (r) { return r.d === day; }).sort(function (a, b) { return slotMin(a.slot) - slotMin(b.slot) || (a.veh < b.veh ? -1 : 1); }); }
-  function afStatus(r, day) { return day > S.today ? 'Booked' : r.signed ? 'Signed' : r.rep ? 'Reported' : 'Not reported'; }
+  function todayDay() {
+    if (S.data && S.data.date === S.today && S.data.day) return S.data.day;
+    var c = cached(S.today); return (c && c.day) || null;
+  }
+  // a vehicle has come when AFMS says Reported, or it is in today's Booking Summary, or in the lane list
+  function afInfo(r, day) {
+    if (day !== S.today) return { st: day > S.today ? 'Booked' : (r.rep ? 'Reported' : 'Not reported'), cls: day > S.today ? 'a-booked' : r.rep ? 'a-reported' : 'a-notreported', came: !!r.rep, sub: '' };
+    var td = todayDay() || {};
+    var lane = (td.rows || []).filter(function (x) { return x.veh === r.veh; })[0];
+    var bk = (td.bookings || []).filter(function (b) { return b.veh === r.veh && !/void|cancel/i.test(b.order); })[0];
+    var signed = r.signed || (lane && lane.dsc === 'ok');
+    if (signed) return { st: 'Signed', cls: 'a-signed', came: true, sub: lane ? 'In lane #' + lane.n + ' · ' + label(lane) : 'Form 69 signed', lane: lane };
+    if (lane) return { st: label(lane), cls: 'p-' + lane.kind, came: true, sub: 'In lane #' + lane.n, lane: lane };
+    if (bk) return { st: niceStatus(bk.order), cls: bClass(bk.order), came: true, sub: 'At counter · not in lane yet' };
+    if (r.rep) return { st: 'Reported', cls: 'a-reported', came: true, sub: 'Reported on AFMS' + (r.repOn ? ' ' + String(r.repOn).replace(/^\S+\s*/, '') : '') };
+    return { st: 'Not reported', cls: 'a-notreported', came: false, sub: '' };
+  }
   function renderAfms() {
     if (!ui.afBox) return;
     var day = S.afDay || S.today, isToday = day === S.today, has = !!S.afms;
@@ -426,8 +444,10 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     ui.aTotal.textContent = has ? rows.length : '–';
     ui.aLbl.textContent = isToday ? 'AFMS bookings today' : (day === addDays(S.today, 1) ? 'bookings tomorrow · ' : 'bookings · ') + dMon(day);
     var am = rows.filter(function (r) { return slotMin(r.slot) < 720; }).length;
+    var info = {}; rows.forEach(function (r) { info[r.veh] = afInfo(r, day); });
+    var came = rows.filter(function (r) { return info[r.veh].came; }).length;
     var cards = isToday
-      ? [['heavy', 'MMV / HMV', heavy.length], ['light', '3W / LMV', light.length], ['rep', 'Reported', rows.filter(function (r) { return r.rep; }).length], ['norep', 'Not reported', rows.filter(function (r) { return !r.rep; }).length]]
+      ? [['heavy', 'MMV / HMV', heavy.length], ['light', '3W / LMV', light.length], ['rep', 'Reported', came], ['norep', 'Not reported', rows.length - came]]
       : [['heavy', 'MMV / HMV', heavy.length], ['light', '3W / LMV', light.length], ['am', 'Morning', am], ['pm', 'Afternoon', rows.length - am]];
     if (cards.map(function (c) { return c[0]; }).indexOf(S.afFilter) < 0) S.afFilter = '';
     ui.aTiles.textContent = '';
@@ -446,7 +466,7 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     else if (isToday) {
       var now = new Date(), nm = now.getHours() * 60 + now.getMinutes();
       var nx = slots.filter(function (x) { return x.m > nm; })[0];
-      lb.textContent = rows.filter(function (r) { return r.signed; }).length + ' Form 69 signed';
+      lb.textContent = rows.filter(function (r) { return info[r.veh].st === 'Signed'; }).length + ' Form 69 signed';
       le.textContent = nx ? '· next slot ' + nx.k + ' (' + nx.n + ')' : '· all slots started';
     } else {
       var top = slots.slice().sort(function (a, b) { return b.n - a.n || a.m - b.m; })[0];
@@ -465,10 +485,13 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     // list
     var f = S.afFilter;
     var vis = rows.filter(function (r) {
-      return !f || (f === 'heavy' && HEAVY.test(r.cat)) || (f === 'light' && !HEAVY.test(r.cat)) || (f === 'rep' && r.rep) || (f === 'norep' && !r.rep) || (f === 'am' && slotMin(r.slot) < 720) || (f === 'pm' && slotMin(r.slot) >= 720);
+      return !f || (f === 'heavy' && HEAVY.test(r.cat)) || (f === 'light' && !HEAVY.test(r.cat)) || (f === 'rep' && info[r.veh].came) || (f === 'norep' && !info[r.veh].came) || (f === 'am' && slotMin(r.slot) < 720) || (f === 'pm' && slotMin(r.slot) >= 720);
     });
     var age = S.afms ? (day > S.today ? S.afms.upAt : S.afms.at) : 0;
-    ui.aSec.textContent = (f && f !== 'heavy' && f !== 'light' ? (cards.filter(function (c2) { return c2[0] === f; })[0] || ['', 'AFMS'])[1] : 'All AFMS bookings') + ' · ' + vis.length + (age ? ' · ' + tm(age) : '');
+    var stale = age && isToday && Date.now() - age > 20 * 60000;
+    ui.aSec.textContent = (f && f !== 'heavy' && f !== 'light' ? (cards.filter(function (c2) { return c2[0] === f; })[0] || ['', 'AFMS'])[1] : 'All AFMS bookings') + ' · ' + vis.length + (age ? ' · ' + (stale ? 'AFMS read ' : '') + tm(age) : '');
+    ui.aSec.classList.toggle('stale', !!stale);
+    ui.aSec.title = stale ? 'AFMS was last read at ' + tm(age) + '. Office PC: keep the AFMS Current Booking page open.' : '';
     // small HMV / LMV toggle next to the heading
     ui.aTog.textContent = '';
     [['heavy', 'HMV', heavy.length], ['light', 'LMV', light.length]].forEach(function (x) {
@@ -483,14 +506,14 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     var sn = 0;
     var byVeh = {}; (((S.data && S.data.date === S.today && S.data.day) || {}).rows || []).forEach(function (r) { byVeh[r.veh] = r; });
     vis.forEach(function (r) {
-      var st = afStatus(r, day);
+      var inf = info[r.veh];
       var e = el('button', 'row arow');
       e.innerHTML = '<span class="n"></span><span class="v"><span class="mono"></span><small></small></span><span class="pill"></span>';
       e.querySelector('.n').textContent = ++sn;
       e.querySelector('.mono').textContent = r.veh;
-      e.querySelector('.v small').textContent = (r.cat || '—') + ' · ' + slotName(r.slot);
-      var p = e.querySelector('.pill'); p.className = 'pill a-' + st.replace(/\s+/g, '').toLowerCase(); p.textContent = st;
-      var lr = isToday && byVeh[r.veh];
+      e.querySelector('.v small').textContent = (r.cat || '—') + ' · ' + slotName(r.slot) + (inf.sub ? ' · ' + inf.sub : '');
+      var p = e.querySelector('.pill'); p.className = 'pill ' + inf.cls; p.textContent = inf.st;
+      var lr = inf.lane || (isToday && byVeh[r.veh]);
       if (lr) e.onclick = function () { openDetail(lr); }; else e.disabled = true;
       ui.aList.appendChild(e);
     });
