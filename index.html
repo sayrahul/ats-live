@@ -197,6 +197,11 @@ html.dark body.tab-book .tabs,html.dark body.tab-veh .tabs{background:var(--soft
 .pc.b span i{background:var(--pend)}.pc.b.u span i{background:var(--unp)}
 .slide-l{animation:sl .22s ease-out}.slide-r{animation:sr .22s ease-out}
 /* AFMS tab: orange */
+.sec.asec{display:flex;align-items:center;gap:8px}.sec.asec>span:first-child{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.atog{display:flex;gap:4px;flex:none}
+.atog .tg{height:26px;padding:0 9px;border-radius:999px;border:1px solid #fed7aa;background:var(--card);color:#9a3412;font:700 11px var(--font,inherit);letter-spacing:0;text-transform:none}
+.atog .tg.on{background:#ea580c;border-color:#ea580c;color:#fff}
+html.dark .atog .tg{border-color:#7c2d12;color:#fdba74}html.dark .atog .tg.on{background:#ea580c;color:#fff}
 .tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
 body.tab-afms .tabs button.on{background:#ea580c;color:#fff}body.tab-afms .tabs button.on span{color:#ffedd5}
 body.tab-afms .sum{border-top-color:#ea580c}body.tab-afms .sec{color:#c2410c}
@@ -229,7 +234,7 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
 <script>
 (function () {
   'use strict';
-  var VERSION = 'v3.7';
+  var VERSION = 'v3.8';
   var CFG_KEY = 'atsLive.cfg', DATA_KEY = 'atsLive.data.', PREF_KEY = 'atsLive.prefs', PUSH_KEY = 'atsLive.push';
   var EVERY = 15000;
   var app = document.getElementById('app'), views = document.getElementById('views');
@@ -383,7 +388,8 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     ui.afBox.appendChild(as);
     ui.aProgSec = el('div', 'sec', 'By slot'); ui.afBox.appendChild(ui.aProgSec);
     ui.aProg = el('div', 'prog'); ui.afBox.appendChild(ui.aProg);
-    ui.aSec = el('div', 'sec', 'All AFMS bookings'); ui.afBox.appendChild(ui.aSec);
+    ui.aSecRow = el('div', 'sec asec'); ui.aSec = el('span', null, 'All AFMS bookings'); ui.aSecRow.appendChild(ui.aSec);
+    ui.aTog = el('span', 'atog'); ui.aSecRow.appendChild(ui.aTog); ui.afBox.appendChild(ui.aSecRow);
     ui.aList = el('div', 'list'); ui.afBox.appendChild(ui.aList);
     app.appendChild(ui.afBox); app.appendChild(ui.bookBox); app.appendChild(ui.vehBox);
     gestures();
@@ -462,20 +468,27 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
       return !f || (f === 'heavy' && HEAVY.test(r.cat)) || (f === 'light' && !HEAVY.test(r.cat)) || (f === 'rep' && r.rep) || (f === 'norep' && !r.rep) || (f === 'am' && slotMin(r.slot) < 720) || (f === 'pm' && slotMin(r.slot) >= 720);
     });
     var age = S.afms ? (day > S.today ? S.afms.upAt : S.afms.at) : 0;
-    ui.aSec.textContent = (f ? (cards.filter(function (c2) { return c2[0] === f; })[0] || ['', 'AFMS'])[1] : 'All AFMS bookings') + ' · ' + vis.length + (age ? ' · read ' + tm(age) : '');
+    ui.aSec.textContent = (f && f !== 'heavy' && f !== 'light' ? (cards.filter(function (c2) { return c2[0] === f; })[0] || ['', 'AFMS'])[1] : 'All AFMS bookings') + ' · ' + vis.length + (age ? ' · ' + tm(age) : '');
+    // small HMV / LMV toggle next to the heading
+    ui.aTog.textContent = '';
+    [['heavy', 'HMV', heavy.length], ['light', 'LMV', light.length]].forEach(function (x) {
+      var b = el('button', 'tg' + (f === x[0] ? ' on' : ''), x[1] + ' ' + (has ? x[2] : ''));
+      b.setAttribute('aria-pressed', f === x[0] ? 'true' : 'false');
+      b.onclick = function () { S.afFilter = S.afFilter === x[0] ? '' : x[0]; renderAfms(); };
+      ui.aTog.appendChild(b);
+    });
     ui.aList.textContent = '';
     if (!has) { for (var i = 0; i < 6; i++) ui.aList.appendChild(el('div', 'sk')); return; }
     if (!vis.length) { ui.aList.appendChild(el('div', 'empty', rows.length ? 'Nothing here.' : (day > S.today ? 'No AFMS bookings read for this day yet.' : 'No AFMS bookings read today yet (AFMS must be open on the office PC).'))); return; }
-    var lastSlot = '';
+    var sn = 0;
     var byVeh = {}; (((S.data && S.data.date === S.today && S.data.day) || {}).rows || []).forEach(function (r) { byVeh[r.veh] = r; });
     vis.forEach(function (r) {
-      var st = afStatus(r, day), ss = slotStart(r.slot), sk = ss.t + ss.ap;
+      var st = afStatus(r, day);
       var e = el('button', 'row arow');
-      e.innerHTML = '<span class="n slot"><b></b><small></small></span><span class="v"><span class="mono"></span><small></small></span><span class="pill"></span>';
-      if (sk !== lastSlot) { e.querySelector('.slot b').textContent = ss.t; e.querySelector('.slot small').textContent = ss.ap; }
-      lastSlot = sk;
+      e.innerHTML = '<span class="n"></span><span class="v"><span class="mono"></span><small></small></span><span class="pill"></span>';
+      e.querySelector('.n').textContent = ++sn;
       e.querySelector('.mono').textContent = r.veh;
-      e.querySelector('.v small').textContent = r.cat || '—';
+      e.querySelector('.v small').textContent = (r.cat || '—') + ' · ' + slotName(r.slot);
       var p = e.querySelector('.pill'); p.className = 'pill a-' + st.replace(/\s+/g, '').toLowerCase(); p.textContent = st;
       var lr = isToday && byVeh[r.veh];
       if (lr) e.onclick = function () { openDetail(lr); }; else e.disabled = true;
