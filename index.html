@@ -73,6 +73,14 @@ html.dark .dsc.no{color:#f9a8d4}
 .nudge span{flex:1}.nudge .go{border:none;background:var(--brand);color:#fff;border-radius:10px;height:34px;padding:0 12px;font-weight:700}
 .nudge .x{border:none;background:none;color:inherit;font-size:20px;width:30px;height:34px}
 .offline{margin:4px 16px 0;padding:8px 12px;border-radius:12px;background:var(--pendBg);color:var(--pend);font-size:12.5px;font-weight:600;text-align:center}
+.offline.down,.offline.phone{display:flex;flex-direction:column;gap:2px;text-align:left;padding:10px 14px;border-radius:14px}
+.offline.down{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}.offline.phone{background:#f1f5f9;border:1px solid #e2e8f0;color:#334155}
+.offline span{font-weight:500;font-size:12px;opacity:.85}
+html.dark .offline.down{background:#2a0f0f;border-color:#7f1d1d;color:#fca5a5}html.dark .offline.phone{background:var(--soft);border-color:var(--line);color:var(--text)}
+.dot.gone{background:#94a3b8}
+.lockscr{position:fixed;inset:0;z-index:9999;background:#fff;color:#cbd5e1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-size:12px;letter-spacing:.3px}
+html.dark .lockscr{background:#0b0f14;color:#334155}
+body.locked{overflow:hidden}
 .sum{margin:6px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:14px}
 .big{display:flex;align-items:baseline;gap:8px}
 .big b{font-size:34px;letter-spacing:-1px;line-height:1;font-variant-numeric:tabular-nums}
@@ -236,7 +244,7 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
 <script>
 (function () {
   'use strict';
-  var VERSION = 'v3.9';
+  var VERSION = 'v3.11';
   var CFG_KEY = 'atsLive.cfg', DATA_KEY = 'atsLive.data.', PREF_KEY = 'atsLive.prefs', PUSH_KEY = 'atsLive.push';
   var EVERY = 15000;
   var app = document.getElementById('app'), views = document.getElementById('views');
@@ -682,11 +690,47 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     var d = S.data;
     if (!d) { ui.dot.className = 'dot old'; ui.stat.textContent = S.err || 'Connecting…'; return; }
     ui.title.textContent = d.station || 'ATS Live';
-    var fresh = d.last && d.last.at && (d.now - d.last.at) < 5 * 60000;
-    if (S.err) { ui.dot.className = 'dot off'; ui.stat.textContent = S.err; }
-    else if (fresh) { ui.dot.className = 'dot'; ui.stat.textContent = 'Live · updated ' + tm(d.last.at); }
-    else { ui.dot.className = 'dot old'; ui.stat.textContent = d.last && d.last.at ? 'Office PC not sending · last ' + tm(d.last.at) : 'Waiting for the office PC'; }
+    // last signal from the office PC: every minute it sends at least a small ping
+    var sig = Math.max(d.beat || 0, (d.last && d.last.at) || 0);
+    var nowSrv = Date.now() + (S.skew || 0), age = sig ? nowSrv - sig : 0;
+    var phoneOff = S.err === 'No internet' || (navigator.onLine === false);
+    ui.offline.className = 'offline';
+    if (phoneOff) {
+      ui.dot.className = 'dot gone'; ui.stat.textContent = 'No internet on this phone';
+      ui.offline.hidden = !S.data; ui.offline.classList.add('phone');
+      ui.offline.innerHTML = '<b>You are offline</b><span>Showing the last saved data. It updates when the phone is back online.</span>';
+    } else if (S.err) { ui.dot.className = 'dot off'; ui.stat.textContent = S.err; ui.offline.hidden = true; }
+    else if (!sig) { ui.dot.className = 'dot old'; ui.stat.textContent = 'Waiting for the office PC'; ui.offline.hidden = true; }
+    else if (age > 3 * 60000) {
+      ui.dot.className = 'dot off'; ui.stat.textContent = 'Internet down · ' + dur(age) + ' ago';
+      ui.offline.hidden = false; ui.offline.classList.add('down');
+      ui.offline.innerHTML = '<b>Internet down at ATS · ' + dur(age) + '</b><span>Last signal ' + tm(sig) + '. Numbers below are from then.</span>';
+    } else {
+      ui.dot.className = 'dot'; ui.offline.hidden = true;
+      ui.stat.textContent = 'Live · updated ' + tm(d.last && d.last.at ? d.last.at : sig);
+    }
     renderBell();
+  }
+  function dur(ms) { var m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min'; }
+  // ---------- Live OFF in the extension: whole app blank / locked ----------
+  function lockApp() {
+    S.locked = true;
+    try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf(DATA_KEY) === 0 || k === 'atsLive.afms') localStorage.removeItem(k); }); } catch (e) { /* ignore */ }
+    S.data = null; S.afms = null; S.sig = '';
+    try { if ('clearAppBadge' in navigator) navigator.clearAppBadge(); } catch (e) { /* ignore */ }
+    if (S.view) { try { closeView(); } catch (e) { /* ignore */ } }
+    if (!ui.lock) {
+      ui.lock = el('div', 'lockscr');
+      ui.lock.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg><span>Locked</span>';
+      document.body.appendChild(ui.lock);
+    }
+    ui.lock.hidden = false; document.body.classList.add('locked');
+    if (rowEls) { rowEls.forEach(function (o) { o.el.remove(); }); rowEls.clear(); }
+  }
+  function unlockApp() {
+    if (!S.locked) return;
+    S.locked = false; S.auto = true; S.sig = '';
+    if (ui.lock) ui.lock.hidden = true; document.body.classList.remove('locked');
   }
   function badge() {
     try {
@@ -714,10 +758,14 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     var forDay = S.auto ? '' : S.cur;
     var q = forDay ? { date: forDay } : {};
     if (forDay && !manual && S.data && S.data.day && S.data.date === forDay && S.data.ver) q.since = S.data.ver;
+    if (S.locked) { delete q.since; q = {}; }
     return api(q).then(function (j) {
+      if (j.off) { lockApp(); return; }
+      if (S.locked) { unlockApp(); forDay = ''; }
       if (!S.auto && forDay !== S.cur) return;
+      if (j.now) S.skew = j.now - Date.now();
       if (j.same) {   // nothing changed on this day: just the live dot
-        S.err = ''; S.today = j.today; S.data.last = j.last; S.data.now = j.now;
+        S.err = ''; S.today = j.today; S.data.last = j.last; S.data.beat = j.beat; S.data.now = j.now;
         ui.offline.hidden = true; renderStatus(); return;
       }
       S.err = ''; S.today = j.today;
@@ -734,7 +782,7 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     }).catch(function (e) {
       if (e && e.server && /no access/i.test(e.message)) { localStorage.removeItem(CFG_KEY); cfg = null; showSetup('The link was changed. Open the new link.'); return; }
       S.err = e && e.server ? 'Sheet error' : 'No internet';
-      ui.offline.hidden = !S.data; ui.offline.textContent = S.err + ' · showing the last saved list';
+      if (!e || !e.server) S.err = 'No internet';
       renderStatus();
       if (!S.data) { ui.list.textContent = ''; ui.list.appendChild(el('div', 'empty', 'Could not reach Google. Check internet, then pull down to refresh.')); }
     }).then(function () { S.loading = false; });
@@ -922,7 +970,9 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     var d = S.data && S.data.day; if (!d) return '';
     var rows = d.rows, c = d.counts, st = (S.data.station || 'ATS Live');
     var line = function (r) { return r.n + '. ' + r.veh + ' – ' + (r.kind === 'PENDING' || r.kind === 'DONE' ? 'Pending' : r.kind === 'ISSUE' ? (r.st || 'Issue') : r.kind === 'HOLD' ? (r.st || 'HOLD') : r.kind); };
-    var sec = function (t, list) { return list.length ? ['', '*' + t + ' (' + list.length + ')*'].concat(list.map(line)) : []; };
+    // PASS list: an empty line where a serial number is missing (that vehicle is in FAIL / HOLD above)
+    var gapped = function (list) { var out = [], prev = 0; list.forEach(function (r) { if (prev && r.n > prev + 1) out.push(''); out.push(line(r)); prev = r.n; }); return out; };
+    var sec = function (t, list) { return list.length ? ['', '*' + t + ' (' + list.length + ')*'].concat(t === 'PASS' ? gapped(list) : list.map(line)) : []; };
     var out = ['*' + st + ' – Day Report*', 'Date: ' + dmy(d.date), '*Total ' + c.total + '* · PASS ' + c.pass + ' · FAIL ' + c.fail + ' · HOLD ' + c.hold];
     out = out.concat(sec('FAIL', rows.filter(function (r) { return r.kind === 'FAIL'; })),
       sec('PASS', rows.filter(function (r) { return r.kind === 'PASS'; })),
@@ -1026,6 +1076,8 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
   }
   document.addEventListener('visibilitychange', function () { if (!document.hidden && cfg) load(false); });
   window.addEventListener('online', function () { if (cfg) load(false); });
+  window.addEventListener('offline', function () { if (S.data) renderStatus(); });
+  setInterval(function () { if (S.data && !S.locked && !document.hidden) renderStatus(); }, 30000);   // "Internet down · N min" keeps counting
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(function () {});
     navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'refresh' && cfg) load(true); });
