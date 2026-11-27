@@ -244,7 +244,7 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
 <script>
 (function () {
   'use strict';
-  var VERSION = 'v3.11';
+  var VERSION = 'v3.12';
   var CFG_KEY = 'atsLive.cfg', DATA_KEY = 'atsLive.data.', PREF_KEY = 'atsLive.prefs', PUSH_KEY = 'atsLive.push';
   var EVERY = 15000;
   var app = document.getElementById('app'), views = document.getElementById('views');
@@ -534,7 +534,7 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
   }
   function bClass(o) {
     if (/void|cancel/i.test(o)) return 'b-void';
-    if (/unprocess/i.test(o)) return 'b-unp';
+    if (/unprocess|corroborat/i.test(o)) return 'b-unp';
     if (/new/i.test(o)) return 'b-new';
     if (/print|process|complete|done/i.test(o)) return 'b-ok';
     return 'b-other';
@@ -550,7 +550,8 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     // fixed cards (shown with 0 too), like PASS / FAIL / HOLD / Pending; Void is shown but not counted
     var cnt = { 'b-ok': 0, 'b-new': 0, 'b-unp': 0, 'b-void': 0, 'b-other': 0 };
     bk.forEach(function (b) { cnt[bClass(b.order)]++; });
-    var cards = [['b-ok', 'Printed'], ['b-new', 'New order'], ['b-unp', 'Unprocessed'], ['b-void', 'Void']];
+    var hasCorr = (d && d.bookings || []).some(function (b) { return /corroborat/i.test(b.order); });
+    var cards = [['b-ok', 'Printed'], ['b-new', 'New order'], ['b-unp', hasCorr ? 'Unproc. / Corrob.' : 'Unprocessed'], ['b-void', 'Void']];
     ui.bTiles.textContent = '';
     cards.forEach(function (c2) {
       var t = el('button', 'btile ' + c2[0] + (c2[0] === 'b-void' ? ' vt' : '') + (S.bfilter === c2[0] ? ' on' : ''));
@@ -568,7 +569,7 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     ui.bProg.textContent = '';
     if (!waiting.length) ui.bProg.appendChild(el('div', 'pc ph', d ? 'All bookings are in lane' : '…'));
     waiting.forEach(function (b) {
-      var w = el('div', 'pc b' + (/unprocess/i.test(b.order) ? ' u' : '')); w.appendChild(el('div', 'mono', b.veh));
+      var w = el('div', 'pc b' + (/unprocess|corroborat/i.test(b.order) ? ' u' : '')); w.appendChild(el('div', 'mono', b.veh));
       var sp = el('span'); sp.appendChild(el('i')); sp.appendChild(document.createTextNode(niceStatus(b.order))); w.appendChild(sp);
       ui.bProg.appendChild(w);
     });
@@ -582,7 +583,7 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
       if (S.bfilter && bClass(b.order) !== S.bfilter) return;
       shown++;
       var r = byVeh[b.veh];
-      var sub = v ? 'Booking void' : r ? 'In lane · ' + label(r) : /unprocess/i.test(b.order) ? (sent[b.veh] ? 'Sent to Backend' : 'Not sent to Backend yet') : 'Not in lane yet';
+      var sub = v ? 'Booking void' : r ? 'In lane · ' + label(r) : /unprocess|corroborat/i.test(b.order) ? (sent[b.veh] ? 'Sent to Backend' : 'Not sent to Backend yet') : 'Not in lane yet';
       var e = el('button', 'row' + (v ? ' void' : ''));
       e.innerHTML = '<span class="n"></span><span class="v"><span class="mono"></span><small></small></span><span class="pill"></span>';
       e.querySelector('.n').textContent = v ? '–' : n;
@@ -648,7 +649,7 @@ html.dark .pill.a-notreported{background:#33240a;color:#fcd34d}html.dark .pill.a
     });
     // list
     var f = S.filter, vis;
-    if (f === 'UNP') vis = unp.map(function (u) { return { n: '–', veh: u.veh, kind: 'UNP', st: '', sub: u.sent ? 'Sent to Backend' : 'Booking Summary · UnProcessed', unp: true }; });
+    if (f === 'UNP') vis = unp.map(function (u) { return { n: '–', veh: u.veh, kind: 'UNP', st: '', sub: (u.why || 'UnProcessed') + ' · ' + (u.sent ? 'Sent to Backend' : 'Booking Summary'), unp: true }; });
     else vis = rows.filter(function (r) { return f === 'all' || (f === 'PASS' && r.kind === 'PASS') || (f === 'FAIL' && r.kind === 'FAIL') || (f === 'HOLD' && (r.kind === 'HOLD' || r.kind === 'ISSUE')) || (f === 'PEND' && isPend(r)); });
     var names = { all: 'All vehicles · ' + (d ? c.total : ''), PASS: 'PASS · ' + c.pass, FAIL: 'FAIL · ' + c.fail, HOLD: 'HOLD / Issue · ' + c.hold, PEND: 'Pending · ' + c.pending, UNP: 'Unprocessed · ' + c.unp + ' (not in Total)' };
     ui.listSec.textContent = names[f];
